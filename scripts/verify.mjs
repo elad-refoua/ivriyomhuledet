@@ -65,6 +65,20 @@ const privacyHtml = await readFile(resolve(root, "dist/privacy.html"), "utf8");
 const termsHtml = await readFile(resolve(root, "dist/terms.html"), "utf8");
 const accessibilityHtml = await readFile(resolve(root, "dist/accessibility.html"), "utf8");
 const googleCalendarSource = await readFile(resolve(root, "dist/google-calendar.js"), "utf8");
+assert.match(indexHtml, /http-equiv="Content-Security-Policy"/);
+assert.match(indexHtml, /id="vault-dialog"/);
+assert.match(indexHtml, /id="vault-form"/);
+assert.match(indexHtml, /id="vault-passphrase"[^>]+type="password"/);
+assert.match(indexHtml, /id="vault-confirm"[^>]+type="password"/);
+assert.match(indexHtml, /id="lock-vault"/);
+assert.match(indexHtml, /id="app-shell"[^>]+inert/);
+
+const csp = indexHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] || "";
+assert.match(csp, /default-src 'self'/);
+assert.match(csp, /object-src 'none'/);
+assert.match(csp, /script-src 'self' https:\/\/accounts\.google\.com/);
+assert.doesNotMatch(csp, /script-src[^;]*(?:'unsafe-inline'|'unsafe-eval')/);
+assert.match(csp, /connect-src[^;]*https:\/\/www\.googleapis\.com/);
 assert.match(indexHtml, /dir="rtl"/);
 assert.match(
   indexHtml,

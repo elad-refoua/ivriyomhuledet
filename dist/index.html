@@ -8,13 +8,18 @@
       name="description"
       content="מחשבים ימי הולדת עבריים ומסנכרנים אותם ישירות ל-Google Calendar."
     />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' https://accounts.google.com; connect-src 'self' https://accounts.google.com https://www.googleapis.com; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://accounts.google.com; form-action 'self' https://accounts.google.com"
+    />
     <title>עבריולדת — ימי הולדת עבריים ביומן Google</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body data-google-client-id="149595455712-o2q44abvsj4i62cfqguggcakgp28crjf.apps.googleusercontent.com">
-    <a class="skip-link" href="#main-content">דלגו לתוכן הראשי</a>
-    <div class="site-shell">
+    <div id="app-shell" aria-hidden="true" inert>
+      <a class="skip-link" href="#main-content">דלגו לתוכן הראשי</a>
+      <div class="site-shell">
       <header class="topbar">
         <a class="brand" href="./" aria-label="עבריולדת — דף הבית">
           <span class="brand-mark" aria-hidden="true">
@@ -30,13 +35,16 @@
           </span>
         </a>
 
-        <a class="privacy-pill" href="./privacy.html">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3 5.5 6v5.2c0 4.2 2.7 7.8 6.5 9.8 3.8-2 6.5-5.6 6.5-9.8V6L12 3Z"></path>
-            <path d="m9.3 12 1.8 1.8 3.7-4"></path>
-          </svg>
-          <span>הפרטים נשמרים רק במכשיר שלך</span>
-        </a>
+        <div class="topbar-actions">
+          <a class="privacy-pill" href="./privacy.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3 5.5 6v5.2c0 4.2 2.7 7.8 6.5 9.8 3.8-2 6.5-5.6 6.5-9.8V6L12 3Z"></path>
+              <path d="m9.3 12 1.8 1.8 3.7-4"></path>
+            </svg>
+            <span>הפרטים נשמרים רק במכשיר שלך</span>
+          </a>
+          <button id="lock-vault" class="vault-lock-button" type="button" hidden>נעילת הכספת</button>
+        </div>
       </header>
 
       <main id="main-content">
@@ -289,7 +297,80 @@
         </nav>
         <span>חישוב התאריכים באמצעות Hebcal</span>
       </footer>
+      </div>
     </div>
+
+    <dialog
+      id="vault-dialog"
+      class="vault-dialog"
+      aria-modal="true"
+      aria-labelledby="vault-title"
+      aria-describedby="vault-copy"
+      open
+    >
+      <section class="vault-card">
+        <div class="vault-illustration" aria-hidden="true">
+          <svg viewBox="0 0 96 96">
+            <rect x="17" y="24" width="62" height="55" rx="16"></rect>
+            <path d="M29 18v13M67 18v13M18 40h60"></path>
+            <rect x="37" y="51" width="22" height="18" rx="5"></rect>
+            <path d="M42 51v-5a6 6 0 0 1 12 0v5M48 58v5"></path>
+          </svg>
+        </div>
+        <p class="vault-eyebrow">הכספת האישית שלך</p>
+        <h1 id="vault-title">פותחים את רשימת ימי ההולדת</h1>
+        <p id="vault-copy" class="vault-copy">
+          הסיסמה שלך מצפינה את הרשימה במכשיר הזה בלבד. אם תשכחו אותה, גם בעלי האתר לא יכולים לשחזר אותה.
+        </p>
+
+        <form id="vault-form" novalidate>
+          <label class="field" for="vault-passphrase">
+            <span>סיסמת הכספת</span>
+            <input
+              id="vault-passphrase"
+              name="vaultPassphrase"
+              type="password"
+              autocomplete="current-password"
+              minlength="12"
+              aria-describedby="vault-passphrase-hint"
+              required
+            />
+            <small id="vault-passphrase-hint" class="field-hint">לפחות 12 תווים.</small>
+          </label>
+
+          <div id="vault-confirm-field" hidden>
+            <label class="field" for="vault-confirm">
+              <span>אימות הסיסמה</span>
+              <input
+                id="vault-confirm"
+                name="vaultConfirm"
+                type="password"
+                autocomplete="new-password"
+                minlength="12"
+              />
+            </label>
+          </div>
+
+          <p id="vault-error" class="inline-message is-error" role="alert" aria-live="assertive" hidden></p>
+
+          <div class="vault-actions">
+            <button id="vault-submit" class="primary-button" type="submit">פתיחת הכספת</button>
+            <button id="vault-reset" class="vault-reset" type="button">שכחתי את הסיסמה</button>
+          </div>
+
+          <section id="vault-reset-confirm" class="vault-reset-panel" aria-labelledby="vault-reset-title" hidden>
+            <h2 id="vault-reset-title">לאתחל את הכספת?</h2>
+            <p>
+              האתחול מוחק רק את רשימת ימי ההולדת השמורה במכשיר הזה. הוא לא מוחק נתונים שכבר סונכרנו ל־Google Calendar.
+            </p>
+            <div class="vault-reset-actions">
+              <button id="vault-reset-cancel" class="secondary-button" type="button">ביטול</button>
+              <button id="vault-reset-approve" class="danger-button" type="button">איפוס הכספת</button>
+            </div>
+          </section>
+        </form>
+      </section>
+    </dialog>
 
     <dialog id="confirm-dialog" class="confirm-dialog">
       <form method="dialog">
