@@ -130,15 +130,26 @@ export function createVaultStore({
       throw new Error("הנתונים הישנים אינם תקינים.");
     }
 
+    const snapshot = snapshotMigrationState();
+    let encryptedWriteSucceeded = false;
     try {
       const salt = cryptoImpl.getRandomValues(new Uint8Array(SALT_BYTES));
       const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
       await writeAndVerifyVault(data, key, salt);
+      encryptedWriteSucceeded = true;
       removeAndVerifyLegacyData();
       activeKey = key;
       activeSalt = salt;
       return data;
     } catch {
+      if (encryptedWriteSucceeded) {
+        try {
+          restoreMigrationState(snapshot);
+        } catch {
+          lock();
+        }
+      }
+      lock();
       throw new Error("לא הצלחנו להעביר את הנתונים לכספת המוצפנת.");
     }
   }
@@ -249,6 +260,32 @@ export function createVaultStore({
     ) {
       throw new Error("legacy removal failed");
     }
+  }
+
+  function snapshotMigrationState() {
+    return {
+      vault: readStorage(VAULT_STORAGE_KEY),
+      people: readStorage(LEGACY_PEOPLE_KEY),
+      calendar: readStorage(LEGACY_CALENDAR_KEY),
+    };
+  }
+
+  function restoreMigrationState(snapshot) {
+    restoreStorageValue(LEGACY_PEOPLE_KEY, snapshot.people);
+    restoreStorageValue(LEGACY_CALENDAR_KEY, snapshot.calendar);
+    restoreStorageValue(VAULT_STORAGE_KEY, snapshot.vault);
+    if (
+      readStorage(LEGACY_PEOPLE_KEY) !== snapshot.people ||
+      readStorage(LEGACY_CALENDAR_KEY) !== snapshot.calendar ||
+      readStorage(VAULT_STORAGE_KEY) !== snapshot.vault
+    ) {
+      throw new Error("migration rollback failed");
+    }
+  }
+
+  function restoreStorageValue(key, value) {
+    if (value === null) storage.removeItem(key);
+    else storage.setItem(key, value);
   }
 
   async function writeAndVerifyVault(data, key, salt) {

@@ -124,6 +124,33 @@ export async function runSecureStorageVerification() {
   assert.equal(failedMigrationStorage.getItem(LEGACY_CALENDAR_KEY), migrationSeed[LEGACY_CALENDAR_KEY]);
   failedMigrationStorage.setItem = originalSetItem;
 
+  for (const [failedKey, silentlyFails] of [
+    [LEGACY_PEOPLE_KEY, false],
+    [LEGACY_CALENDAR_KEY, false],
+    [LEGACY_CALENDAR_KEY, true],
+  ]) {
+    const cleanupFailureStorage = memoryStorage(migrationSeed);
+    const originalRemoveItem = cleanupFailureStorage.removeItem;
+    cleanupFailureStorage.removeItem = (key) => {
+      if (key !== failedKey) return originalRemoveItem(key);
+      if (silentlyFails) return undefined;
+      throw new Error("remove failed");
+    };
+    const cleanupFailureStore = createVaultStore({
+      storage: cleanupFailureStorage,
+      cryptoImpl: crypto,
+    });
+    await assert.rejects(
+      () => cleanupFailureStore.migrate("סיסמת הגירה ארוכה 2026"),
+      /לא הצלחנו להעביר/
+    );
+    assert.equal(cleanupFailureStorage.getItem(VAULT_STORAGE_KEY), null);
+    assert.equal(cleanupFailureStorage.getItem(LEGACY_PEOPLE_KEY), migrationSeed[LEGACY_PEOPLE_KEY]);
+    assert.equal(cleanupFailureStorage.getItem(LEGACY_CALENDAR_KEY), migrationSeed[LEGACY_CALENDAR_KEY]);
+    assert.equal(cleanupFailureStore.isUnlocked(), false);
+    assert.equal(cleanupFailureStore.status(), "legacy");
+  }
+
   legacyStore.reset();
   assert.equal(legacyStore.isUnlocked(), false);
   assert.equal(legacyStorage.getItem(VAULT_STORAGE_KEY), null);
