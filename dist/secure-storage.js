@@ -1,3 +1,5 @@
+import { birthFromHebrew } from "./calendar.js";
+
 export const VAULT_STORAGE_KEY = "ivriyomhuledet.vault.v1";
 export const LEGACY_PEOPLE_KEY = "ivriyomhuledet.people.v1";
 export const LEGACY_CALENDAR_KEY = "ivriyomhuledet.googleCalendarId.v1";
@@ -149,9 +151,19 @@ function validatePerson(person) {
     !hasExactKeys(person.birth, ["yy", "mm", "dd"]) ||
     !Number.isInteger(person.birth.yy) ||
     !Number.isInteger(person.birth.mm) ||
-    !Number.isInteger(person.birth.dd)
+    !Number.isInteger(person.birth.dd) ||
+    !isValidHebrewBirth(person.birth)
   ) {
     throw new Error("נתוני הכספת אינם תקינים.");
+  }
+}
+
+function isValidHebrewBirth(birth) {
+  try {
+    birthFromHebrew(birth.dd, birth.mm, birth.yy);
+    return true;
+  } catch {
+    return false;
   }
 }
 

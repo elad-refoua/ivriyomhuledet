@@ -43,6 +43,10 @@ export async function runSecureStorageVerification() {
   const wrongKey = await deriveVaultKey("סיסמה אחרת לגמרי 2026", salt, crypto);
   await assert.rejects(() => openVaultData(envelope, wrongKey, crypto));
 
+  const impossibleBirth = structuredClone(sampleData);
+  impossibleBirth.people[0].birth = { yy: -1, mm: 99, dd: 0 };
+  await assert.rejects(() => sealVaultData(impossibleBirth, key, salt, crypto));
+
   const tampered = structuredClone(envelope);
   tampered.ciphertext = `${tampered.ciphertext.slice(0, -2)}AA`;
   await assert.rejects(() => openVaultData(tampered, key, crypto));
