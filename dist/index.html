@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#172554" />
+    <meta
+      name="description"
+      content="מחשבים ימי הולדת עבריים ומסנכרנים אותם ישירות ל-Google Calendar."
+    />
+    <title>עבריולדת — ימי הולדת עבריים ביומן Google</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body data-google-client-id="">
+    <div class="site-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="עבריולדת — דף הבית">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <rect x="7.5" y="9.5" width="33" height="31" rx="9"></rect>
+              <path d="M15 6.5v7M33 6.5v7M8 19h32"></path>
+              <path d="m17 29 4.5 4.5L31 24"></path>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>עבריולדת</strong>
+            <small>העברי נכנס ליומן</small>
+          </span>
+        </a>
+
+        <a class="privacy-pill" href="./privacy.html">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 5.5 6v5.2c0 4.2 2.7 7.8 6.5 9.8 3.8-2 6.5-5.6 6.5-9.8V6L12 3Z"></path>
+            <path d="m9.3 12 1.8 1.8 3.7-4"></path>
+          </svg>
+          <span>הפרטים נשמרים רק במכשיר שלך</span>
+        </a>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <div>
+            <p class="eyebrow">פעם אחת וזה ביומן</p>
+            <h1 id="page-title">ימי הולדת עבריים,<br /><span>ישר ל־Google Calendar.</span></h1>
+            <p class="intro-copy">
+              מוסיפים שם ותאריך לידה. אנחנו מחשבים את היום העברי המשתנה
+              ומכינים את 20 השנים הבאות.
+            </p>
+          </div>
+
+          <ol class="flow" aria-label="שלבי ההוספה">
+            <li class="flow-step is-active" data-flow-step="people">
+              <span class="flow-number">1</span>
+              <span><strong>מוסיפים</strong><small>שם ותאריך לידה</small></span>
+            </li>
+            <li class="flow-step" data-flow-step="connect">
+              <span class="flow-number">2</span>
+              <span><strong>מחברים</strong><small>את חשבון Google</small></span>
+            </li>
+            <li class="flow-step" data-flow-step="sync">
+              <span class="flow-number">3</span>
+              <span><strong>מסנכרנים</strong><small>והכול נכנס ליומן</small></span>
+            </li>
+          </ol>
+        </section>
+
+        <div class="workspace">
+          <section class="surface form-surface" aria-labelledby="form-title">
+            <div class="surface-heading">
+              <span class="section-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path>
+                  <path d="M4.5 21a7.5 7.5 0 0 1 15 0M19 7v6M16 10h6"></path>
+                </svg>
+              </span>
+              <div>
+                <h2 id="form-title">הוספת יום הולדת</h2>
+                <p>נתחיל בפרטים הבסיסיים.</p>
+              </div>
+            </div>
+
+            <form id="birthday-form" novalidate>
+              <label class="field">
+                <span>שם</span>
+                <input
+                  id="person-name"
+                  name="personName"
+                  type="text"
+                  maxlength="80"
+                  autocomplete="off"
+                  placeholder="למשל: נועה"
+                  required
+                />
+              </label>
+
+              <fieldset class="mode-fieldset">
+                <legend>איזה תאריך יש לך?</legend>
+                <div class="segmented" role="radiogroup" aria-label="סוג התאריך">
+                  <label>
+                    <input type="radio" name="dateMode" value="gregorian" checked />
+                    <span>תאריך לועזי</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="dateMode" value="hebrew" />
+                    <span>תאריך עברי</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <div id="gregorian-fields" class="date-fields">
+                <label class="field">
+                  <span>תאריך לידה</span>
+                  <input id="gregorian-date" name="gregorianDate" type="date" required />
+                </label>
+
+                <label class="check-field">
+                  <input id="after-sunset" name="afterSunset" type="checkbox" />
+                  <span>
+                    <strong>הלידה הייתה אחרי השקיעה</strong>
+                    <small>חשוב לסמן — היום העברי מתחלף בשקיעה.</small>
+                  </span>
+                </label>
+                <p id="gregorian-date-preview" class="date-preview" aria-live="polite" hidden></p>
+              </div>
+
+              <div id="hebrew-fields" class="date-fields" hidden>
+                <div class="hebrew-date-grid">
+                  <label class="field">
+                    <span>יום</span>
+                    <select id="hebrew-day" name="hebrewDay"></select>
+                  </label>
+                  <label class="field">
+                    <span>חודש</span>
+                    <select id="hebrew-month" name="hebrewMonth"></select>
+                  </label>
+                  <label class="field">
+                    <span>שנה</span>
+                    <input
+                      id="hebrew-year"
+                      name="hebrewYear"
+                      type="text"
+                      inputmode="text"
+                      maxlength="12"
+                      autocomplete="off"
+                      aria-describedby="hebrew-year-hint"
+                      placeholder="למשל תשמ״ט"
+                    />
+                    <small id="hebrew-year-hint" class="field-hint">אפשר גם תשמט, התשמ״ט או 5749</small>
+                  </label>
+                </div>
+                <p id="hebrew-date-preview" class="date-preview" aria-live="polite" hidden></p>
+              </div>
+
+              <label class="field">
+                <span>תזכורת</span>
+                <select id="reminder" name="reminder">
+                  <option value="evening" selected>בערב שלפני</option>
+                  <option value="morning-before">בבוקר שלפני</option>
+                  <option value="three-days">שלושה ימים לפני</option>
+                  <option value="none">בלי תזכורת</option>
+                </select>
+              </label>
+
+              <p id="form-message" class="inline-message is-error" role="alert" hidden></p>
+
+              <div class="form-actions">
+                <button class="primary-button" type="submit">
+                  <span id="submit-label">הוסף לרשימה</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M19 12H5m5-5-5 5 5 5"></path>
+                  </svg>
+                </button>
+                <button id="cancel-edit" class="secondary-button" type="button" hidden>ביטול עריכה</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="surface list-surface" aria-labelledby="list-title">
+            <div class="list-topline">
+              <div class="surface-heading compact">
+                <span class="section-icon warm" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"></path>
+                    <path d="M8 13h3M8 16h6"></path>
+                  </svg>
+                </span>
+                <div>
+                  <h2 id="list-title">הרשימה שלך</h2>
+                  <p id="people-count">עוד לא הוספת אנשים</p>
+                </div>
+              </div>
+              <button id="clear-all" class="quiet-button danger" type="button" hidden>נקה הכול</button>
+            </div>
+
+            <div id="empty-state" class="empty-state">
+              <div class="empty-calendar" aria-hidden="true">
+                <span>י״ד</span>
+                <small>תשרי</small>
+              </div>
+              <strong>כאן יופיעו ימי ההולדת</strong>
+              <p>אחרי ההוספה נראה את התאריך העברי ואת המועד הלועזי הקרוב.</p>
+              <button id="empty-focus-form" class="text-link" type="button">הוספת יום הולדת ראשון</button>
+            </div>
+
+            <ol id="people-list" class="people-list" aria-live="polite"></ol>
+
+            <section id="sync-card" class="sync-card" aria-labelledby="sync-title">
+              <div class="sync-heading">
+                <span class="google-calendar-mark" aria-hidden="true">
+                  <span>31</span>
+                </span>
+                <div>
+                  <h3 id="sync-title">Google Calendar</h3>
+                  <p id="sync-description">הוסיפו אדם אחד לפחות כדי להמשיך.</p>
+                </div>
+                <span id="connection-badge" class="status-badge">לא מחובר</span>
+              </div>
+
+              <div id="sync-progress" class="sync-progress" hidden>
+                <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+                <p id="progress-text" role="status">מתחברים ל־Google…</p>
+              </div>
+
+              <div id="sync-success" class="sync-success" role="status" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+                <div>
+                  <strong>היומן מסונכרן</strong>
+                  <p id="sync-success-copy"></p>
+                </div>
+              </div>
+
+              <p id="sync-error" class="inline-message is-error" role="alert" hidden></p>
+
+              <button id="google-action" class="google-button" type="button" disabled>
+                <svg class="google-g" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.3c1.9-1.8 2.9-4.4 2.9-7.4Z"></path>
+                  <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.5c-.9.6-2.1 1-3.4 1-2.6 0-4.9-1.8-5.7-4.2H3v2.6A10 10 0 0 0 12 22Z"></path>
+                  <path fill="#FBBC05" d="M6.3 13.9A6 6 0 0 1 6 12c0-.7.1-1.3.3-1.9V7.5H3A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.5l3.3-2.6Z"></path>
+                  <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.9 1.5l2.9-2.9A9.8 9.8 0 0 0 3 7.5l3.3 2.6C7.1 7.7 9.4 5.9 12 5.9Z"></path>
+                </svg>
+                <span id="google-button-label">חבר את Google וסנכרן</span>
+              </button>
+
+              <div class="sync-footer">
+                <span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3 5.5 6v5.2c0 4.2 2.7 7.8 6.5 9.8 3.8-2 6.5-5.6 6.5-9.8V6L12 3Z"></path>
+                  </svg>
+                  ניצור יומן נפרד. לא נקרא את היומנים האחרים שלך.
+                </span>
+                <button id="disconnect-google" class="quiet-button" type="button" hidden>ניתוק Google</button>
+              </div>
+
+              <div class="alternative-action">
+                <span>משתמשים ביומן אחר?</span>
+                <button id="download-calendar" class="text-link" type="button" disabled>הורדת קובץ ליומן</button>
+              </div>
+              <p id="download-status" class="sr-only" aria-live="polite"></p>
+            </section>
+          </section>
+        </div>
+
+        <section class="trust-row" aria-label="מידע חשוב">
+          <div>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 16 0 8 8 0 0 0-16 0Z"></path><path d="M12 8v4l2.5 1.5"></path></svg>
+            <span><strong>20 שנים קדימה</strong><small>עם התאריך הנכון בכל שנה</small></span>
+          </div>
+          <div>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2M5 10h14v11H5V10Z"></path></svg>
+            <span><strong>פרטי כברירת מחדל</strong><small>המידע נשמר בדפדפן שלך</small></span>
+          </div>
+          <div>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7"></path></svg>
+            <span><strong>בלי חישובים ידניים</strong><small>כולל שנים מעוברות וחודשי אדר</small></span>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>© <span id="footer-year"></span> עבריולדת</span>
+        <nav aria-label="קישורים משפטיים">
+          <a href="./privacy.html">פרטיות</a>
+          <a href="./terms.html">תנאי שימוש</a>
+        </nav>
+        <span>חישוב התאריכים באמצעות Hebcal</span>
+      </footer>
+    </div>
+
+    <dialog id="confirm-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <span class="dialog-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"></path></svg>
+        </span>
+        <h2 id="confirm-title">למחוק?</h2>
+        <p id="confirm-copy"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button">ביטול</button>
+          <button id="confirm-delete" value="confirm" class="danger-button">מחיקה</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

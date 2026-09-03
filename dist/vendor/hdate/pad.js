@@ -1,0 +1,40 @@
+/*! @hebcal/hdate v0.22.8, distributed under GPLv2 https://www.gnu.org/licenses/gpl-2.0.txt */
+/**
+ * Formats a number with leading zeros so the resulting string is 4 digits long.
+ * Similar to `string.padStart(4, '0')` but will also format
+ * negative numbers similar to how the JavaScript date formats
+ * negative year numbers (e.g. `-37` is formatted as `-000037`).
+ * @example
+ * pad4(7);     // '0007'
+ * pad4(2024);  // '2024'
+ * pad4(-37);   // '-000037'
+ */
+export function pad4(num) {
+    if (num < 0) {
+        return '-00' + pad4(-num);
+    }
+    else if (num < 10) {
+        return '000' + num;
+    }
+    else if (num < 100) {
+        return '00' + num;
+    }
+    else if (num < 1000) {
+        return '0' + num;
+    }
+    return String(num);
+}
+/**
+ * Formats a number with leading zeros so the resulting string is 2 digits long.
+ * Similar to `string.padStart(2, '0')`.
+ * @example
+ * pad2(3);   // '03'
+ * pad2(11);  // '11'
+ */
+export function pad2(num) {
+    if (num >= 0 && num < 10) {
+        return '0' + num;
+    }
+    return String(num);
+}
+//# sourceMappingURL=pad.js.map
