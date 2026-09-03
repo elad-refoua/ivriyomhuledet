@@ -1,12 +1,26 @@
 import assert from "node:assert/strict";
 import {
+  LEGACY_CALENDAR_KEY,
+  LEGACY_PEOPLE_KEY,
   MIN_PASSPHRASE_LENGTH,
   PBKDF2_ITERATIONS,
+  VAULT_STORAGE_KEY,
+  createVaultStore,
   deriveVaultKey,
   openVaultData,
   sealVaultData,
   validatePassphrase,
 } from "../dist/secure-storage.js";
+
+function memoryStorage(seed = {}) {
+  const values = new Map(Object.entries(seed));
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+    snapshot: () => Object.fromEntries(values),
+  };
+}
 
 const sampleData = {
   version: 1,
@@ -54,4 +68,65 @@ export async function runSecureStorageVerification() {
   const nonCanonicalBase64 = structuredClone(envelope);
   nonCanonicalBase64.kdf.salt = `${nonCanonicalBase64.kdf.salt.slice(0, -3)}B==`;
   await assert.rejects(() => openVaultData(nonCanonicalBase64, key, crypto));
+
+  const storage = memoryStorage();
+  const store = createVaultStore({ storage, cryptoImpl: crypto });
+  assert.equal(store.status(), "empty");
+  await store.create("סיסמת בדיקה ארוכה 2026", sampleData);
+  assert.equal(store.status(), "locked");
+  assert.equal(store.isUnlocked(), true);
+  assert.doesNotMatch(storage.getItem(VAULT_STORAGE_KEY), /נועה בדיקה/);
+
+  store.lock();
+  assert.equal(store.isUnlocked(), false);
+  await assert.rejects(() => store.save(sampleData), /נעולה/);
+  await assert.rejects(() => store.unlock("סיסמה שגויה וארוכה 2026"));
+  assert.deepEqual(await store.unlock("סיסמת בדיקה ארוכה 2026"), sampleData);
+
+  const legacyStorage = memoryStorage({
+    [LEGACY_PEOPLE_KEY]: JSON.stringify(sampleData.people),
+    [LEGACY_CALENDAR_KEY]: sampleData.googleCalendarId,
+  });
+  const legacyStore = createVaultStore({ storage: legacyStorage, cryptoImpl: crypto });
+  assert.equal(legacyStore.status(), "legacy");
+  assert.deepEqual(await legacyStore.migrate("סיסמת הגירה ארוכה 2026"), sampleData);
+  assert.equal(legacyStorage.getItem(LEGACY_PEOPLE_KEY), null);
+  assert.equal(legacyStorage.getItem(LEGACY_CALENDAR_KEY), null);
+  assert.doesNotMatch(legacyStorage.getItem(VAULT_STORAGE_KEY), /נועה בדיקה|private-calendar/);
+
+  const previousEnvelope = storage.getItem(VAULT_STORAGE_KEY);
+  const failingStorage = {
+    getItem: (key) => storage.getItem(key),
+    setItem: () => { throw new Error("quota exceeded"); },
+    removeItem: (key) => storage.removeItem(key),
+  };
+  const failingStore = createVaultStore({ storage: failingStorage, cryptoImpl: crypto });
+  await failingStore.unlock("סיסמת בדיקה ארוכה 2026");
+  await assert.rejects(
+    () => failingStore.save({ ...sampleData, people: [] }),
+    /לא הצלחנו לשמור/
+  );
+  assert.equal(storage.getItem(VAULT_STORAGE_KEY), previousEnvelope);
+
+  const migrationSeed = {
+    [LEGACY_PEOPLE_KEY]: JSON.stringify(sampleData.people),
+    [LEGACY_CALENDAR_KEY]: sampleData.googleCalendarId,
+  };
+  const failedMigrationStorage = memoryStorage(migrationSeed);
+  const originalSetItem = failedMigrationStorage.setItem;
+  failedMigrationStorage.setItem = () => { throw new Error("quota exceeded"); };
+  const failedMigrationStore = createVaultStore({
+    storage: failedMigrationStorage,
+    cryptoImpl: crypto,
+  });
+  await assert.rejects(() => failedMigrationStore.migrate("סיסמת הגירה ארוכה 2026"));
+  assert.equal(failedMigrationStorage.getItem(LEGACY_PEOPLE_KEY), migrationSeed[LEGACY_PEOPLE_KEY]);
+  assert.equal(failedMigrationStorage.getItem(LEGACY_CALENDAR_KEY), migrationSeed[LEGACY_CALENDAR_KEY]);
+  failedMigrationStorage.setItem = originalSetItem;
+
+  legacyStore.reset();
+  assert.equal(legacyStore.isUnlocked(), false);
+  assert.equal(legacyStorage.getItem(VAULT_STORAGE_KEY), null);
+  assert.equal(legacyStorage.getItem(LEGACY_PEOPLE_KEY), null);
+  assert.equal(legacyStorage.getItem(LEGACY_CALENDAR_KEY), null);
 }

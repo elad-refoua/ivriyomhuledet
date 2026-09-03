@@ -88,6 +88,203 @@ export async function openVaultData(envelope, key, cryptoImpl = globalThis.crypt
   return data;
 }
 
+export function createVaultStore({
+  storage = globalThis.localStorage,
+  cryptoImpl = globalThis.crypto,
+} = {}) {
+  let activeKey = null;
+  let activeSalt = null;
+
+  function status() {
+    if (readStorage(VAULT_STORAGE_KEY) !== null) return "locked";
+    if (readStorage(LEGACY_PEOPLE_KEY) !== null || readStorage(LEGACY_CALENDAR_KEY) !== null) {
+      return "legacy";
+    }
+    return "empty";
+  }
+
+  async function create(passphrase, data) {
+    const validatedPassphrase = validatePassphrase(passphrase);
+    if (readStorage(VAULT_STORAGE_KEY) !== null) throw new Error("כבר קיימת כספת מוצפנת.");
+
+    try {
+      const salt = cryptoImpl.getRandomValues(new Uint8Array(SALT_BYTES));
+      const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
+      await writeAndVerifyVault(data, key, salt);
+      activeKey = key;
+      activeSalt = salt;
+    } catch {
+      throw new Error("לא הצלחנו ליצור את הכספת המוצפנת.");
+    }
+  }
+
+  async function migrate(passphrase) {
+    const validatedPassphrase = validatePassphrase(passphrase);
+    if (readStorage(VAULT_STORAGE_KEY) !== null) throw new Error("כבר קיימת כספת מוצפנת.");
+    if (status() !== "legacy") throw new Error("לא נמצאו נתונים ישנים להעברה.");
+
+    let data;
+    try {
+      data = readLegacyData();
+    } catch {
+      throw new Error("הנתונים הישנים אינם תקינים.");
+    }
+
+    try {
+      const salt = cryptoImpl.getRandomValues(new Uint8Array(SALT_BYTES));
+      const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
+      await writeAndVerifyVault(data, key, salt);
+      removeAndVerifyLegacyData();
+      activeKey = key;
+      activeSalt = salt;
+      return data;
+    } catch {
+      throw new Error("לא הצלחנו להעביר את הנתונים לכספת המוצפנת.");
+    }
+  }
+
+  async function unlock(passphrase) {
+    const validatedPassphrase = validatePassphrase(passphrase);
+    let envelope;
+    try {
+      envelope = readSerializedEnvelope();
+      if (!envelope) throw new Error("missing vault");
+      const salt = base64ToBytes(envelope.kdf.salt);
+      const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
+      const data = await openVaultData(envelope, key, cryptoImpl);
+      activeKey = key;
+      activeSalt = salt;
+      return data;
+    } catch {
+      throw new Error("לא הצלחנו לפתוח את הכספת. בדקו את הסיסמה ונסו שוב.");
+    }
+  }
+
+  async function save(data) {
+    if (!activeKey || !activeSalt) throw new Error("הכספת נעולה. יש לפתוח אותה לפני השמירה.");
+    try {
+      await writeAndVerifyVault(data, activeKey, activeSalt);
+    } catch {
+      throw new Error("לא הצלחנו לשמור את הנתונים המוצפנים.");
+    }
+  }
+
+  function lock() {
+    activeKey = null;
+    activeSalt = null;
+  }
+
+  function reset() {
+    lock();
+    let removalFailed = false;
+    for (const key of [VAULT_STORAGE_KEY, LEGACY_PEOPLE_KEY, LEGACY_CALENDAR_KEY]) {
+      try {
+        storage.removeItem(key);
+      } catch {
+        removalFailed = true;
+      }
+    }
+    try {
+      if (
+        removalFailed ||
+        readStorage(VAULT_STORAGE_KEY) !== null ||
+        readStorage(LEGACY_PEOPLE_KEY) !== null ||
+        readStorage(LEGACY_CALENDAR_KEY) !== null
+      ) {
+        throw new Error("reset failed");
+      }
+    } catch {
+      throw new Error("לא הצלחנו לאפס את הכספת.");
+    }
+  }
+
+  function readStorage(key) {
+    try {
+      return storage.getItem(key);
+    } catch {
+      throw new Error("לא הצלחנו לגשת לאחסון המקומי.");
+    }
+  }
+
+  function readSerializedEnvelope() {
+    const serialized = readStorage(VAULT_STORAGE_KEY);
+    if (serialized === null) return null;
+    if (typeof serialized !== "string") throw new Error("invalid vault");
+    let envelope;
+    try {
+      envelope = JSON.parse(serialized);
+    } catch {
+      throw new Error("invalid vault");
+    }
+    validateVaultEnvelope(envelope);
+    return envelope;
+  }
+
+  function readLegacyData() {
+    const serializedPeople = readStorage(LEGACY_PEOPLE_KEY);
+    const googleCalendarId = readStorage(LEGACY_CALENDAR_KEY);
+    const people = serializedPeople === null ? [] : JSON.parse(serializedPeople);
+    const data = {
+      version: 1,
+      people,
+      googleCalendarId: googleCalendarId === null ? "" : googleCalendarId,
+    };
+    validateVaultData(data);
+    return data;
+  }
+
+  function removeAndVerifyLegacyData() {
+    let removalFailed = false;
+    for (const key of [LEGACY_PEOPLE_KEY, LEGACY_CALENDAR_KEY]) {
+      try {
+        storage.removeItem(key);
+      } catch {
+        removalFailed = true;
+      }
+    }
+    if (
+      removalFailed ||
+      readStorage(LEGACY_PEOPLE_KEY) !== null ||
+      readStorage(LEGACY_CALENDAR_KEY) !== null
+    ) {
+      throw new Error("legacy removal failed");
+    }
+  }
+
+  async function writeAndVerifyVault(data, key, salt) {
+    const previousEnvelope = readStorage(VAULT_STORAGE_KEY);
+    let attemptedWrite = false;
+    try {
+      const serialized = JSON.stringify(await sealVaultData(data, key, salt, cryptoImpl));
+      attemptedWrite = true;
+      storage.setItem(VAULT_STORAGE_KEY, serialized);
+      const readBack = readStorage(VAULT_STORAGE_KEY);
+      if (readBack !== serialized) throw new Error("vault read-back failed");
+      const verifiedEnvelope = readSerializedEnvelope();
+      await openVaultData(verifiedEnvelope, key, cryptoImpl);
+    } catch (error) {
+      if (attemptedWrite) restorePreviousEnvelope(previousEnvelope);
+      throw error;
+    }
+  }
+
+  function restorePreviousEnvelope(previousEnvelope) {
+    if (previousEnvelope === null) storage.removeItem(VAULT_STORAGE_KEY);
+    else storage.setItem(VAULT_STORAGE_KEY, previousEnvelope);
+  }
+
+  return {
+    status,
+    create,
+    migrate,
+    unlock,
+    save,
+    lock,
+    reset,
+    isUnlocked: () => Boolean(activeKey),
+  };
+}
+
 function requireCrypto(cryptoImpl) {
   if (
     !cryptoImpl ||
