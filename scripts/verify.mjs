@@ -59,12 +59,31 @@ assert.ok(googleEvents.every((event) => event.description.includes("תאריך �
 const indexHtml = await readFile(resolve(root, "dist/index.html"), "utf8");
 const privacyHtml = await readFile(resolve(root, "dist/privacy.html"), "utf8");
 const termsHtml = await readFile(resolve(root, "dist/terms.html"), "utf8");
+const accessibilityHtml = await readFile(resolve(root, "dist/accessibility.html"), "utf8");
 assert.match(indexHtml, /dir="rtl"/);
-assert.match(indexHtml, /data-google-client-id=/);
+assert.match(
+  indexHtml,
+  /data-google-client-id="149595455712-o2q44abvsj4i62cfqguggcakgp28crjf\.apps\.googleusercontent\.com"/,
+  "public Google OAuth client ID is missing"
+);
 assert.match(indexHtml, /privacy\.html/);
 assert.match(indexHtml, /terms\.html/);
 assert.match(privacyHtml, /פרטיות/);
 assert.match(termsHtml, /תנאי/);
+assert.match(accessibilityHtml, /<html lang="he" dir="rtl">/);
+assert.match(accessibilityHtml, /הצהרת נגישות/);
+assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
+
+for (const [name, html] of [
+  ["index", indexHtml],
+  ["privacy", privacyHtml],
+  ["terms", termsHtml],
+  ["accessibility", accessibilityHtml],
+]) {
+  assert.match(html, /class="skip-link" href="#main-content"/, `${name} is missing a skip link`);
+  assert.match(html, /id="main-content"/, `${name} is missing the main-content target`);
+  assert.match(html, /accessibility\.html/, `${name} is missing the accessibility link`);
+}
 
 const storedValues = new Map();
 globalThis.localStorage = {
