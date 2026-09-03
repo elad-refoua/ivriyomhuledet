@@ -3,7 +3,6 @@ import { buildGoogleCalendarEvents } from "./calendar.js";
 export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
 
 const API_ROOT = "https://www.googleapis.com/calendar/v3";
-const CALENDAR_STORAGE_KEY = "ivriyomhuledet.googleCalendarId.v1";
 const APP_TAG = "ivriyomhuledet";
 
 let currentAccessToken = "";
@@ -74,12 +73,19 @@ export function disconnectGoogle() {
   }
 }
 
-export async function syncGoogleCalendar(people, { onProgress } = {}) {
+export async function syncGoogleCalendar(
+  people,
+  { calendarId = "", onCalendarReady, onProgress } = {}
+) {
   if (!currentAccessToken) {
     throw new Error("צריך להתחבר ל־Google לפני הסנכרון.");
   }
 
-  const calendarId = await ensureCalendar(currentAccessToken);
+  const ensured = await ensureCalendar(currentAccessToken, calendarId);
+  if (ensured.created || ensured.calendarId !== calendarId) {
+    await onCalendarReady?.(ensured.calendarId);
+  }
+
   const sourceEvents = buildGoogleCalendarEvents(people, 20);
   const desiredEvents = await Promise.all(
     sourceEvents.map(async (event) => ({
@@ -88,7 +94,7 @@ export async function syncGoogleCalendar(people, { onProgress } = {}) {
     }))
   );
 
-  const existingEvents = await listManagedEvents(currentAccessToken, calendarId);
+  const existingEvents = await listManagedEvents(currentAccessToken, ensured.calendarId);
   const existingById = new Map(existingEvents.map((event) => [event.id, event]));
   const desiredIds = new Set(desiredEvents.map((event) => event.id));
   const staleEvents = existingEvents.filter((event) => !desiredIds.has(event.id));
@@ -107,7 +113,7 @@ export async function syncGoogleCalendar(people, { onProgress } = {}) {
 
   await mapInBatches(staleEvents, 4, async (event) => {
     await apiRequest(
-      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(event.id)}`,
+      `/calendars/${encodeURIComponent(ensured.calendarId)}/events/${encodeURIComponent(event.id)}`,
       currentAccessToken,
       { method: "DELETE" }
     );
@@ -118,13 +124,13 @@ export async function syncGoogleCalendar(people, { onProgress } = {}) {
     const body = googleEventBody(id, source);
     if (existingById.has(id)) {
       await apiRequest(
-        `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`,
+        `/calendars/${encodeURIComponent(ensured.calendarId)}/events/${encodeURIComponent(id)}`,
         currentAccessToken,
         { method: "PUT", body: JSON.stringify(body) }
       );
     } else {
       await apiRequest(
-        `/calendars/${encodeURIComponent(calendarId)}/events`,
+        `/calendars/${encodeURIComponent(ensured.calendarId)}/events`,
         currentAccessToken,
         { method: "POST", body: JSON.stringify(body) }
       );
@@ -132,18 +138,16 @@ export async function syncGoogleCalendar(people, { onProgress } = {}) {
     reportProgress("מוסיפים את ימי ההולדת…");
   });
 
-  return { calendarId, eventCount: desiredEvents.length };
+  return { calendarId: ensured.calendarId, eventCount: desiredEvents.length };
 }
 
-async function ensureCalendar(accessToken) {
-  const storedId = localStorage.getItem(CALENDAR_STORAGE_KEY);
-  if (storedId) {
+async function ensureCalendar(accessToken, candidateId) {
+  if (candidateId) {
     try {
-      await apiRequest(`/calendars/${encodeURIComponent(storedId)}`, accessToken);
-      return storedId;
+      await apiRequest(`/calendars/${encodeURIComponent(candidateId)}`, accessToken);
+      return { calendarId: candidateId, created: false };
     } catch (error) {
       if (error?.status !== 404) throw error;
-      localStorage.removeItem(CALENDAR_STORAGE_KEY);
     }
   }
 
@@ -157,8 +161,7 @@ async function ensureCalendar(accessToken) {
   });
 
   if (!calendar?.id) throw new Error("Google לא החזיר מזהה ליומן החדש.");
-  localStorage.setItem(CALENDAR_STORAGE_KEY, calendar.id);
-  return calendar.id;
+  return { calendarId: calendar.id, created: true };
 }
 
 async function listManagedEvents(accessToken, calendarId) {

@@ -64,6 +64,7 @@ const indexHtml = await readFile(resolve(root, "dist/index.html"), "utf8");
 const privacyHtml = await readFile(resolve(root, "dist/privacy.html"), "utf8");
 const termsHtml = await readFile(resolve(root, "dist/terms.html"), "utf8");
 const accessibilityHtml = await readFile(resolve(root, "dist/accessibility.html"), "utf8");
+const googleCalendarSource = await readFile(resolve(root, "dist/google-calendar.js"), "utf8");
 assert.match(indexHtml, /dir="rtl"/);
 assert.match(
   indexHtml,
@@ -77,6 +78,8 @@ assert.match(termsHtml, /תנאי/);
 assert.match(accessibilityHtml, /<html lang="he" dir="rtl">/);
 assert.match(accessibilityHtml, /הצהרת נגישות/);
 assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
+assert.doesNotMatch(googleCalendarSource, /localStorage/);
+assert.doesNotMatch(googleCalendarSource, /ivriyomhuledet\.googleCalendarId/);
 
 for (const [name, html] of [
   ["index", indexHtml],
@@ -88,13 +91,6 @@ for (const [name, html] of [
   assert.match(html, /id="main-content"/, `${name} is missing the main-content target`);
   assert.match(html, /accessibility\.html/, `${name} is missing the accessibility link`);
 }
-
-const storedValues = new Map();
-globalThis.localStorage = {
-  getItem: (key) => storedValues.get(key) ?? null,
-  setItem: (key, value) => storedValues.set(key, String(value)),
-  removeItem: (key) => storedValues.delete(key),
-};
 
 globalThis.window = {
   google: {
@@ -124,10 +120,18 @@ globalThis.fetch = async (url, options = {}) => {
   throw new Error(`Unexpected Google Calendar request: ${options.method || "GET"} ${url}`);
 };
 
+let persistedCalendarId = "";
 await connectGoogle("verification.apps.googleusercontent.com");
-await syncGoogleCalendar([person]);
+const syncResult = await syncGoogleCalendar([person], {
+  calendarId: "",
+  onCalendarReady: async (calendarId) => {
+    persistedCalendarId = calendarId;
+  },
+});
 disconnectGoogle();
 
+assert.equal(persistedCalendarId, "verification-calendar");
+assert.equal(syncResult.calendarId, "verification-calendar");
 assert.equal(submittedGoogleEvents.length, 20, "expected 20 submitted Google events");
 assert.ok(
   submittedGoogleEvents.every(
@@ -136,6 +140,37 @@ assert.ok(
   "Google event source URL must point to the public GitHub Pages site"
 );
 
+const requestOrder = [];
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/missing-calendar") && !options.method) {
+    requestOrder.push("missing");
+    return errorResponse(404, "Not Found");
+  }
+  if (url.endsWith("/calendars") && options.method === "POST") {
+    requestOrder.push("created");
+    return jsonResponse({ id: "replacement-calendar" });
+  }
+  if (url.includes("/calendars/replacement-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/replacement-calendar/events") && options.method === "POST") {
+    if (!requestOrder.includes("event")) requestOrder.push("event");
+    return jsonResponse({ id: "replacement-event" });
+  }
+  throw new Error(`Unexpected replacement request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+await syncGoogleCalendar([person], {
+  calendarId: "missing-calendar",
+  onCalendarReady: async (calendarId) => {
+    assert.equal(calendarId, "replacement-calendar");
+    requestOrder.push("persisted");
+  },
+});
+disconnectGoogle();
+assert.deepEqual(requestOrder.slice(0, 4), ["missing", "created", "persisted", "event"]);
+
 console.log("✓ בדיקות עבריולדת עברו בהצלחה");
 
 function jsonResponse(payload) {
@@ -143,5 +178,13 @@ function jsonResponse(payload) {
     ok: true,
     status: 200,
     json: async () => payload,
+  };
+}
+
+function errorResponse(status, message = "") {
+  return {
+    ok: false,
+    status,
+    json: async () => ({ error: { message } }),
   };
 }
