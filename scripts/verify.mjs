@@ -1,3 +1,7 @@
+import { runSecureStorageVerification } from "./verify-secure-storage.mjs";
+
+await runSecureStorageVerification();
+
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
