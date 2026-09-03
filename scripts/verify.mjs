@@ -79,6 +79,7 @@ assert.match(accessibilityHtml, /<html lang="he" dir="rtl">/);
 assert.match(accessibilityHtml, /הצהרת נגישות/);
 assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
 assert.doesNotMatch(googleCalendarSource, /localStorage/);
+assert.doesNotMatch(googleCalendarSource, /sessionStorage/);
 assert.doesNotMatch(googleCalendarSource, /ivriyomhuledet\.googleCalendarId/);
 
 for (const [name, html] of [
