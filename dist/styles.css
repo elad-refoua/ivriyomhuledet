@@ -1731,9 +1731,10 @@ body:has(.vault-dialog[open]) {
 
 .legal-card p,
 .legal-card li {
+  max-width: 72ch;
   color: #4f5870;
-  font-size: 0.95rem;
-  line-height: 1.75;
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 .legal-card ul {
