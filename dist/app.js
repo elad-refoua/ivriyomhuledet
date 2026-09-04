@@ -68,6 +68,7 @@ const confirmCopy = document.getElementById("confirm-copy");
 const toast = document.getElementById("toast");
 const flowSteps = [...document.querySelectorAll("[data-flow-step]")];
 const appShell = document.getElementById("app-shell");
+const workspaceTitle = document.getElementById("workspace-title");
 const lockButton = document.getElementById("lock-vault");
 const vaultDialog = document.getElementById("vault-dialog");
 const vaultForm = document.getElementById("vault-form");
@@ -432,7 +433,7 @@ async function handleVaultSubmit(event) {
     vaultResetConfirm.hidden = true;
     renderPeople();
     vaultDialog.close();
-    nameInput.focus();
+    focusAfterVaultOpen();
     vaultReadyResolver?.();
     vaultReadyResolver = null;
   } catch (error) {
@@ -447,6 +448,14 @@ async function handleVaultSubmit(event) {
     resetVaultInputs();
     if (!resetInProgress) vaultSubmit.disabled = false;
   }
+}
+
+function focusAfterVaultOpen() {
+  if (people.length === 0) {
+    nameInput.focus();
+    return;
+  }
+  workspaceTitle.focus();
 }
 
 async function vaultSubmitOperation(operationEpoch, passphrase) {
@@ -715,6 +724,7 @@ function renderPeople() {
   }
 
   const hasPeople = people.length > 0;
+  appShell.dataset.listState = hasPeople ? "ready" : "empty";
   emptyState.hidden = hasPeople;
   clearButton.hidden = !hasPeople;
   downloadButton.disabled = !hasPeople;
@@ -892,28 +902,35 @@ function updateGoogleUI() {
 }
 
 function updateFlow(hasPeople, connected, synced) {
-  for (const step of flowSteps) {
-    step.classList.remove("is-active", "is-complete");
-  }
-
   const peopleStep = flowSteps.find((step) => step.dataset.flowStep === "people");
   const connectStep = flowSteps.find((step) => step.dataset.flowStep === "connect");
   const syncStep = flowSteps.find((step) => step.dataset.flowStep === "sync");
 
   if (!hasPeople) {
-    peopleStep.classList.add("is-active");
+    setFlowStepState(peopleStep, "active");
+    setFlowStepState(connectStep, "upcoming");
+    setFlowStepState(syncStep, "upcoming");
     return;
   }
-  peopleStep.classList.add("is-complete");
+  setFlowStepState(peopleStep, "complete");
 
   if (!connected) {
-    connectStep.classList.add("is-active");
+    setFlowStepState(connectStep, "active");
+    setFlowStepState(syncStep, "upcoming");
     return;
   }
-  connectStep.classList.add("is-complete");
+  setFlowStepState(connectStep, "complete");
 
-  if (synced) syncStep.classList.add("is-complete");
-  else syncStep.classList.add("is-active");
+  setFlowStepState(syncStep, synced ? "complete" : "active");
+}
+
+function setFlowStepState(step, state) {
+  step.classList.toggle("is-active", state === "active");
+  step.classList.toggle("is-complete", state === "complete");
+  step.querySelector("[data-flow-status]").textContent =
+    state === "complete" ? "הושלם" : state === "active" ? "עכשיו" : "בהמשך";
+  if (state === "active") step.setAttribute("aria-current", "step");
+  else step.removeAttribute("aria-current");
 }
 
 function setSyncing(active, label = "", percent = 0) {

@@ -36,43 +36,40 @@
         </a>
 
         <div class="topbar-actions">
-          <a class="privacy-pill" href="./privacy.html">
+          <a id="vault-status" class="privacy-pill" href="./privacy.html">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 3 5.5 6v5.2c0 4.2 2.7 7.8 6.5 9.8 3.8-2 6.5-5.6 6.5-9.8V6L12 3Z"></path>
               <path d="m9.3 12 1.8 1.8 3.7-4"></path>
             </svg>
-            <span>המידע המקומי מוצפן במכשיר; פרטי ימי ההולדת והאירועים נשלחים ל־Google רק בסנכרון יזום</span>
+            <span>מוגן במכשיר הזה</span>
+            <small>פרטים</small>
           </a>
           <button id="lock-vault" class="vault-lock-button" type="button" hidden>נעילת הכספת</button>
         </div>
       </header>
 
       <main id="main-content">
-        <section class="intro" aria-labelledby="page-title">
-          <div>
-            <p class="eyebrow">פעם אחת וזה ביומן</p>
-            <h1 id="page-title">ימי הולדת עבריים,<br /><span>ישר ל־Google Calendar.</span></h1>
-            <p class="intro-copy">
-              מוסיפים שם ותאריך לידה. אנחנו מחשבים את היום העברי המשתנה
-              ומכינים את 20 השנים הבאות.
-            </p>
-          </div>
+        <section class="workspace-intro" aria-labelledby="workspace-title">
+          <h1 id="workspace-title" tabindex="-1">ימי הולדת עבריים, ישר ליומן</h1>
+          <p>מוסיפים יום הולדת עברי ליומן — פעם אחת, ל־20 השנים הבאות.</p>
+        </section>
 
-          <ol class="flow" aria-label="שלבי ההוספה">
+        <nav class="journey" aria-label="התקדמות בהכנת היומן">
+          <ol class="flow">
             <li class="flow-step is-active" data-flow-step="people">
-              <span class="flow-number">1</span>
-              <span><strong>מוסיפים</strong><small>שם ותאריך לידה</small></span>
+              <span class="flow-number" aria-hidden="true">1</span>
+              <span><strong>מוסיפים</strong><small data-flow-status>עכשיו</small></span>
             </li>
             <li class="flow-step" data-flow-step="connect">
-              <span class="flow-number">2</span>
-              <span><strong>מחברים</strong><small>את חשבון Google</small></span>
+              <span class="flow-number" aria-hidden="true">2</span>
+              <span><strong>מחברים</strong><small data-flow-status>עכשיו</small></span>
             </li>
             <li class="flow-step" data-flow-step="sync">
-              <span class="flow-number">3</span>
-              <span><strong>מסנכרנים</strong><small>והכול נכנס ליומן</small></span>
+              <span class="flow-number" aria-hidden="true">3</span>
+              <span><strong>מסנכרנים</strong><small data-flow-status>עכשיו</small></span>
             </li>
           </ol>
-        </section>
+        </nav>
 
         <div class="workspace">
           <section class="surface form-surface" aria-labelledby="form-title">

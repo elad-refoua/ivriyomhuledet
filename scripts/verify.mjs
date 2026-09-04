@@ -115,6 +115,13 @@ assert.match(indexHtml, /id="vault-passphrase"[^>]+type="password"/);
 assert.match(indexHtml, /id="vault-confirm"[^>]+type="password"/);
 assert.match(indexHtml, /id="lock-vault"/);
 assert.match(indexHtml, /id="app-shell"[^>]+inert/);
+assert.match(indexHtml, /id="workspace-title"[^>]*tabindex="-1"/);
+assert.match(indexHtml, /id="vault-status"/);
+assert.equal((indexHtml.match(/data-flow-status/g) || []).length, 3);
+assert.match(indexHtml, /מוגן במכשיר הזה/);
+assert.match(appSource, /function focusAfterVaultOpen\(/);
+assert.match(appSource, /appShell\.dataset\.listState/);
+assert.match(appSource, /setAttribute\("aria-current", "step"\)/);
 
 for (const id of [
   "vault-scroll",
@@ -157,8 +164,6 @@ assert.match(privacyHtml, /אינה ניתנת לשחזור/);
 assert.match(privacyHtml, /תוסף דפדפן זדוני/);
 assert.match(privacyHtml, /elad-refoua\.github\.io/);
 assert.match(privacyHtml, /אינו נשמר באחסון הדפדפן או בשרת האתר/);
-assert.match(indexHtml, /המידע המקומי מוצפן במכשיר/);
-assert.match(indexHtml, /פרטי ימי ההולדת והאירועים נשלחים ל־Google רק בסנכרון יזום/);
 assert.doesNotMatch(indexHtml, /הפרטים נשמרים רק במכשיר שלך/);
 assert.match(termsHtml, /תנאי/);
 assert.match(accessibilityHtml, /<html lang="he" dir="rtl">/);
