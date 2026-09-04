@@ -337,6 +337,11 @@ button:disabled {
   padding: 27px;
 }
 
+#app-shell[data-list-state="ready"] .list-surface {
+  border-color: #cbd4f3;
+  box-shadow: 0 16px 38px rgba(28, 39, 82, 0.11);
+}
+
 .surface-heading {
   display: flex;
   align-items: flex-start;
@@ -840,12 +845,12 @@ input[type="date"] {
   border-radius: 17px;
   background: #fff;
   box-shadow: var(--shadow-sm);
-  transition: border-color 150ms ease, transform 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .person-card:hover {
-  border-color: #c9d1e2;
-  transform: translateY(-1px);
+  border-color: #c7d0ef;
+  box-shadow: 0 8px 24px rgba(28, 39, 82, 0.1);
 }
 
 .person-card-main {
@@ -935,10 +940,13 @@ input[type="date"] {
 }
 
 .icon-button {
-  display: grid;
-  width: 41px;
-  height: 41px;
-  place-items: center;
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
   border: 0;
   border-radius: 11px;
   color: var(--muted);
@@ -1877,8 +1885,8 @@ body:has(.vault-dialog[open]) {
   }
 
   .icon-button {
-    width: 36px;
-    height: 34px;
+    width: auto;
+    height: auto;
   }
 
   .upcoming-dates li {
@@ -1928,6 +1936,16 @@ body:has(.vault-dialog[open]) {
 
   .legal-shell .topbar {
     margin-bottom: 25px;
+  }
+}
+
+@media (max-width: 420px) {
+  .icon-button .action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
   }
 }
 

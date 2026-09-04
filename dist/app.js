@@ -843,7 +843,7 @@ function renderPeople() {
   clearButton.hidden = !hasPeople;
   downloadButton.disabled = !hasPeople;
   peopleCount.textContent = hasPeople
-    ? `${people.length} ${people.length === 1 ? "אדם מוכן לסנכרון" : "אנשים מוכנים לסנכרון"}`
+    ? people.length === 1 ? "יום הולדת אחד" : `${people.length} ימי הולדת`
     : "עוד לא הוספת אנשים";
   if (!hasPeople) downloadStatus.textContent = "";
   updateGoogleUI();
@@ -928,7 +928,14 @@ function createIconButton(action, person, label, iconPath) {
   button.dataset.action = action;
   button.dataset.personId = person.id;
   button.setAttribute("aria-label", `${label}: ${person.name}`);
-  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPath}</svg>`;
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = iconPath;
+  const actionLabel = document.createElement("span");
+  actionLabel.className = "action-label";
+  actionLabel.textContent = label;
+  button.append(icon, actionLabel);
   return button;
 }
 
