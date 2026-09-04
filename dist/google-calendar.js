@@ -6,6 +6,7 @@ const API_ROOT = "https://www.googleapis.com/calendar/v3";
 const APP_TAG = "ivriyomhuledet";
 
 let currentAccessToken = "";
+let connectionGeneration = 0;
 
 export function isGoogleConfigured(clientId) {
   return /^[0-9a-z-]+\.apps\.googleusercontent\.com$/i.test(String(clientId || "").trim());
@@ -61,6 +62,7 @@ export async function connectGoogle(clientId) {
 
     tokenClient.requestAccessToken();
   });
+  connectionGeneration += 1;
 
   return currentAccessToken;
 }
@@ -68,9 +70,15 @@ export async function connectGoogle(clientId) {
 export function disconnectGoogle() {
   const token = currentAccessToken;
   currentAccessToken = "";
+  connectionGeneration += 1;
   if (token && window.google?.accounts?.oauth2) {
     window.google.accounts.oauth2.revoke(token, () => {});
   }
+}
+
+export function clearGoogleSession() {
+  currentAccessToken = "";
+  connectionGeneration += 1;
 }
 
 export async function syncGoogleCalendar(
@@ -80,10 +88,15 @@ export async function syncGoogleCalendar(
   if (!currentAccessToken) {
     throw new Error("צריך להתחבר ל־Google לפני הסנכרון.");
   }
+  const syncGeneration = connectionGeneration;
+  const accessToken = currentAccessToken;
+  assertActiveSession(syncGeneration);
 
-  const ensured = await ensureCalendar(currentAccessToken, calendarId);
+  const ensured = await ensureCalendar(accessToken, calendarId);
+  assertActiveSession(syncGeneration);
   if (ensured.created || ensured.calendarId !== calendarId) {
     await onCalendarReady?.(ensured.calendarId);
+    assertActiveSession(syncGeneration);
   }
 
   const sourceEvents = buildGoogleCalendarEvents(people, 20);
@@ -94,7 +107,8 @@ export async function syncGoogleCalendar(
     }))
   );
 
-  const existingEvents = await listManagedEvents(currentAccessToken, ensured.calendarId);
+  const existingEvents = await listManagedEvents(accessToken, ensured.calendarId);
+  assertActiveSession(syncGeneration);
   const existingById = new Map(existingEvents.map((event) => [event.id, event]));
   const desiredIds = new Set(desiredEvents.map((event) => event.id));
   const staleEvents = existingEvents.filter((event) => !desiredIds.has(event.id));
@@ -112,26 +126,28 @@ export async function syncGoogleCalendar(
   };
 
   await mapInBatches(staleEvents, 4, async (event) => {
+    assertActiveSession(syncGeneration);
     await apiRequest(
       `/calendars/${encodeURIComponent(ensured.calendarId)}/events/${encodeURIComponent(event.id)}`,
-      currentAccessToken,
+      accessToken,
       { method: "DELETE" }
     );
     reportProgress("מעדכנים את הרשימה ביומן…");
   });
 
   await mapInBatches(desiredEvents, 4, async ({ id, source }) => {
+    assertActiveSession(syncGeneration);
     const body = googleEventBody(id, source);
     if (existingById.has(id)) {
       await apiRequest(
         `/calendars/${encodeURIComponent(ensured.calendarId)}/events/${encodeURIComponent(id)}`,
-        currentAccessToken,
+        accessToken,
         { method: "PUT", body: JSON.stringify(body) }
       );
     } else {
       await apiRequest(
         `/calendars/${encodeURIComponent(ensured.calendarId)}/events`,
-        currentAccessToken,
+        accessToken,
         { method: "POST", body: JSON.stringify(body) }
       );
     }
@@ -139,6 +155,12 @@ export async function syncGoogleCalendar(
   });
 
   return { calendarId: ensured.calendarId, eventCount: desiredEvents.length };
+}
+
+function assertActiveSession(generation) {
+  if (generation !== connectionGeneration || !currentAccessToken) {
+    throw new Error("החיבור ל־Google בוטל.");
+  }
 }
 
 async function ensureCalendar(accessToken, candidateId) {

@@ -16,6 +16,7 @@ import {
   parseHebrewYear,
 } from "../dist/calendar.js";
 import {
+  clearGoogleSession,
   connectGoogle,
   disconnectGoogle,
   syncGoogleCalendar,
@@ -71,6 +72,13 @@ assert.match(appSource, /await bootstrapVault\(\)/);
 assert.match(appSource, /await vaultStore\.save/);
 assert.match(appSource, /calendarId:\s*googleCalendarId/);
 assert.match(appSource, /onCalendarReady/);
+assert.match(appSource, /lifecycleEpoch/);
+assert.match(appSource, /writeQueue/);
+assert.match(appSource, /resetInProgress/);
+assert.match(appSource, /await waitForPendingWrites\(\)/);
+assert.match(appSource, /pendingVaultOperation/);
+assert.match(appSource, /operationEpoch !== lifecycleEpoch/);
+assert.match(appSource, /clearGoogleSession\(\)/);
 assert.doesNotMatch(appSource, /localStorage/);
 assert.doesNotMatch(appSource, /function loadPeople/);
 assert.doesNotMatch(appSource, /function savePeople/);
@@ -104,6 +112,7 @@ assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
 assert.doesNotMatch(googleCalendarSource, /localStorage/);
 assert.doesNotMatch(googleCalendarSource, /sessionStorage/);
 assert.doesNotMatch(googleCalendarSource, /ivriyomhuledet\.googleCalendarId/);
+assert.match(googleCalendarSource, /clearGoogleSession/);
 
 for (const [name, html] of [
   ["index", indexHtml],
@@ -194,6 +203,33 @@ await syncGoogleCalendar([person], {
 });
 disconnectGoogle();
 assert.deepEqual(requestOrder.slice(0, 4), ["missing", "created", "persisted", "event"]);
+
+await connectGoogle("verification.apps.googleusercontent.com");
+clearGoogleSession();
+await assert.rejects(
+  () => syncGoogleCalendar([person]),
+  /צריך להתחבר ל־Google לפני הסנכרון/
+);
+
+let releaseCalendarRequest;
+let calendarRequestStarted = false;
+const calendarRequestGate = new Promise((resolve) => {
+  releaseCalendarRequest = resolve;
+});
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/cancellable-calendar") && !options.method) {
+    calendarRequestStarted = true;
+    await calendarRequestGate;
+    return jsonResponse({ id: "cancellable-calendar" });
+  }
+  throw new Error(`Unexpected cancellation request: ${options.method || "GET"} ${url}`);
+};
+await connectGoogle("verification.apps.googleusercontent.com");
+const pendingSync = syncGoogleCalendar([person], { calendarId: "cancellable-calendar" });
+while (!calendarRequestStarted) await new Promise((resolve) => setImmediate(resolve));
+clearGoogleSession();
+releaseCalendarRequest();
+await assert.rejects(() => pendingSync, /החיבור ל־Google בוטל/);
 
 console.log("✓ בדיקות עבריולדת עברו בהצלחה");
 
