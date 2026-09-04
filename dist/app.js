@@ -129,6 +129,7 @@ form.addEventListener("submit", async (event) => {
   hideFormMessage();
   let saveAttempted = false;
   birthdaySubmit.disabled = true;
+  const operationEpoch = lifecycleEpoch;
 
   try {
     const name = nameInput.value.trim();
@@ -142,25 +143,26 @@ form.addEventListener("submit", async (event) => {
       ? birthFromGregorian(gregorianInput.value, afterSunsetInput.checked)
       : birthFromHebrew(hebrewDayInput.value, hebrewMonthInput.value, hebrewYearInput.value);
 
+    const editingAtSubmit = editingId;
     const person = {
-      id: editingId || createId(),
+      id: editingAtSubmit || createId(),
       name,
       birth,
       reminder: reminderInput.value,
     };
 
-    const nextPeople = editingId
-      ? people.map((item) => (item.id === editingId ? person : item))
-      : [...people, person];
     saveAttempted = true;
-    await persistState(nextPeople);
+    await persistState((currentPeople) => editingAtSubmit
+      ? currentPeople.map((item) => (item.id === editingAtSubmit ? person : item))
+      : [...currentPeople, person]);
     hasSynced = false;
     syncSuccess.hidden = true;
-    showToast(editingId ? `הפרטים של ${name} עודכנו` : `${name} נוסף לרשימה`);
+    showToast(editingAtSubmit ? `הפרטים של ${name} עודכנו` : `${name} נוסף לרשימה`);
     renderPeople();
     resetForm();
     nameInput.focus();
   } catch (error) {
+    if (isLifecycleAbort(error)) return;
     const message = saveAttempted
       ? SAVE_FAILURE_MESSAGE
       : error instanceof Error ? error.message : "לא הצלחנו להוסיף את התאריך.";
@@ -168,7 +170,7 @@ form.addEventListener("submit", async (event) => {
     if (form.elements.dateMode.value === "gregorian" && !gregorianInput.value) gregorianInput.focus();
     if (form.elements.dateMode.value === "hebrew" && !hebrewYearInput.value.trim()) hebrewYearInput.focus();
   } finally {
-    birthdaySubmit.disabled = false;
+    if (lifecycleEpoch === operationEpoch && !resetInProgress) birthdaySubmit.disabled = false;
   }
 });
 
@@ -221,22 +223,19 @@ confirmDialog.addEventListener("close", async () => {
 
   const deletion = pendingDelete;
   pendingDelete = null;
-  const removed = deletion.type === "person"
-    ? people.find((person) => person.id === deletion.id)
-    : null;
-  const nextPeople = deletion.type === "person"
-    ? people.filter((person) => person.id !== deletion.id)
-    : [];
-
   try {
-    await persistState(nextPeople);
-  } catch {
+    await persistState((currentPeople) => deletion.type === "person"
+      ? currentPeople.filter((person) => person.id !== deletion.id)
+      : []);
+  } catch (error) {
+    if (isLifecycleAbort(error)) return;
     showToast(SAVE_FAILURE_MESSAGE);
     showFormMessage(SAVE_FAILURE_MESSAGE);
     return;
   }
 
   if (deletion.type === "person") {
+    const removed = people.find((person) => person.id === deletion.id);
     if (editingId === deletion.id) resetForm();
     showToast(removed ? `${removed.name} הוסר מהרשימה` : "יום ההולדת הוסר");
   } else {
@@ -276,6 +275,7 @@ googleActionButton.addEventListener("click", async () => {
   try {
     if (!isGoogleConnected()) {
       await connectGoogle(GOOGLE_CLIENT_ID);
+      if (currentSyncRun !== syncRun) return;
       setSyncing(true, "החיבור אושר. מכינים יומן נפרד…", 14);
       updateGoogleUI();
     }
@@ -285,7 +285,7 @@ googleActionButton.addEventListener("click", async () => {
       onCalendarReady: async (calendarId) => {
         if (currentSyncRun !== syncRun) return;
         if (calendarId !== googleCalendarId) {
-          await persistState(people, calendarId);
+          await persistState((currentPeople) => currentPeople, calendarId);
         }
       },
       onProgress: ({ percent, label }) => {
@@ -313,7 +313,9 @@ googleActionButton.addEventListener("click", async () => {
 });
 
 disconnectButton.addEventListener("click", () => {
+  syncRun += 1;
   disconnectGoogle();
+  setSyncing(false);
   hasSynced = false;
   syncSuccess.hidden = true;
   hideSyncError();
@@ -408,7 +410,7 @@ async function handleVaultSubmit(event) {
     if (pendingVaultOperation === trackedOperation) pendingVaultOperation = Promise.resolve();
     vaultPassphrase.value = "";
     vaultConfirm.value = "";
-    vaultSubmit.disabled = false;
+    if (!resetInProgress) vaultSubmit.disabled = false;
   }
 }
 
@@ -454,6 +456,7 @@ async function handleVaultReset() {
     appShell.setAttribute("aria-hidden", "true");
     appShell.setAttribute("inert", "");
     lockButton.hidden = true;
+    vaultSubmit.disabled = false;
     setVaultMode("create");
     vaultPassphrase.focus();
   } catch {
@@ -477,19 +480,21 @@ function lockApplication() {
   vaultPassphrase.focus();
 }
 
-async function persistState(nextPeople, nextCalendarId = googleCalendarId) {
+async function persistState(nextPeople, nextCalendarId) {
   const operationEpoch = lifecycleEpoch;
   if (resetInProgress) throw lifecycleAbort();
   const operation = writeQueue.then(async () => {
     if (operationEpoch !== lifecycleEpoch || resetInProgress) throw lifecycleAbort();
+    const resolvedPeople = typeof nextPeople === "function" ? nextPeople(people) : nextPeople;
+    const resolvedCalendarId = nextCalendarId === undefined ? googleCalendarId : nextCalendarId;
     await vaultStore.save({
       version: 1,
-      people: nextPeople,
-      googleCalendarId: nextCalendarId,
+      people: resolvedPeople,
+      googleCalendarId: resolvedCalendarId,
     });
     if (operationEpoch !== lifecycleEpoch || resetInProgress) throw lifecycleAbort();
-    people = nextPeople;
-    googleCalendarId = nextCalendarId;
+    people = resolvedPeople;
+    googleCalendarId = resolvedCalendarId;
   });
   writeQueue = operation.catch(() => {});
   return operation;
@@ -524,6 +529,7 @@ function clearApplicationState() {
   hideFormMessage();
   downloadStatus.textContent = "";
   peopleList.replaceChildren();
+  birthdaySubmit.disabled = false;
   if (confirmDialog.open) confirmDialog.close("cancel");
   resetForm();
   renderPeople();

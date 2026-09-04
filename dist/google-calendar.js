@@ -41,9 +41,10 @@ export async function connectGoogle(clientId) {
     throw new Error("חיבור Google עדיין לא הופעל באתר.");
   }
 
+  const requestGeneration = connectionGeneration;
   await prepareGoogleIdentity();
 
-  currentAccessToken = await new Promise((resolve, reject) => {
+  const accessToken = await new Promise((resolve, reject) => {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: GOOGLE_CALENDAR_SCOPE,
@@ -62,6 +63,10 @@ export async function connectGoogle(clientId) {
 
     tokenClient.requestAccessToken();
   });
+  if (requestGeneration !== connectionGeneration) {
+    throw new Error("החיבור ל־Google בוטל.");
+  }
+  currentAccessToken = accessToken;
   connectionGeneration += 1;
 
   return currentAccessToken;

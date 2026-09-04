@@ -19,6 +19,7 @@ import {
   clearGoogleSession,
   connectGoogle,
   disconnectGoogle,
+  isGoogleConnected,
   syncGoogleCalendar,
 } from "../dist/google-calendar.js";
 
@@ -113,6 +114,12 @@ assert.doesNotMatch(googleCalendarSource, /localStorage/);
 assert.doesNotMatch(googleCalendarSource, /sessionStorage/);
 assert.doesNotMatch(googleCalendarSource, /ivriyomhuledet\.googleCalendarId/);
 assert.match(googleCalendarSource, /clearGoogleSession/);
+assert.match(googleCalendarSource, /requestGeneration/);
+assert.match(googleCalendarSource, /requestGeneration !== connectionGeneration/);
+assert.match(appSource, /typeof nextPeople === "function"/);
+assert.match(appSource, /currentPeople/);
+assert.match(appSource, /isLifecycleAbort\(error\)/);
+assert.match(appSource, /syncRun \+= 1/);
 
 for (const [name, html] of [
   ["index", indexHtml],
@@ -230,6 +237,18 @@ while (!calendarRequestStarted) await new Promise((resolve) => setImmediate(reso
 clearGoogleSession();
 releaseCalendarRequest();
 await assert.rejects(() => pendingSync, /החיבור ל־Google בוטל/);
+
+let deferredTokenCallback;
+globalThis.window.google.accounts.oauth2.initTokenClient = ({ callback }) => {
+  deferredTokenCallback = callback;
+  return { requestAccessToken: () => {} };
+};
+const pendingConnection = connectGoogle("verification.apps.googleusercontent.com");
+while (!deferredTokenCallback) await new Promise((resolve) => setImmediate(resolve));
+clearGoogleSession();
+deferredTokenCallback({ access_token: "stale-access-token" });
+await assert.rejects(() => pendingConnection, /החיבור ל־Google בוטל/);
+assert.equal(isGoogleConnected(), false);
 
 console.log("✓ בדיקות עבריולדת עברו בהצלחה");
 
