@@ -5,6 +5,11 @@ export const LEGACY_PEOPLE_KEY = "ivriyomhuledet.people.v1";
 export const LEGACY_CALENDAR_KEY = "ivriyomhuledet.googleCalendarId.v1";
 export const PBKDF2_ITERATIONS = 600_000;
 export const MIN_PASSPHRASE_LENGTH = 12;
+export const VAULT_ERROR_CODES = Object.freeze({
+  CRYPTO_UNSUPPORTED: "CRYPTO_UNSUPPORTED",
+  STORAGE_ACCESS: "STORAGE_ACCESS",
+  STORAGE_WRITE: "STORAGE_WRITE",
+});
 
 const AAD = new TextEncoder().encode("ivriyomhuledet-vault-envelope-v1");
 const SALT_BYTES = 16;
@@ -12,6 +17,17 @@ const IV_BYTES = 12;
 const REMINDER_VALUES = new Set(["evening", "morning-before", "three-days", "none"]);
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CRYPTO_UNSUPPORTED_MESSAGE = "הדפדפן אינו תומך בהצפנה הנדרשת. השתמשו בדפדפן מודרני ומעודכן.";
+const STORAGE_ACCESS_MESSAGE = "לא הצלחנו לגשת לאחסון המקומי.";
+const STORAGE_WRITE_MESSAGE = "לא הצלחנו לעדכן את האחסון המקומי.";
+
+export class VaultStoreError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "VaultStoreError";
+    this.code = code;
+  }
+}
 
 export function validatePassphrase(passphrase) {
   const value = String(passphrase ?? "").normalize("NFC");
@@ -108,12 +124,14 @@ export function createVaultStore({
     if (readStorage(VAULT_STORAGE_KEY) !== null) throw new Error("כבר קיימת כספת מוצפנת.");
 
     try {
+      requireCrypto(cryptoImpl);
       const salt = cryptoImpl.getRandomValues(new Uint8Array(SALT_BYTES));
       const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
       await writeAndVerifyVault(data, key, salt);
       activeKey = key;
       activeSalt = salt;
-    } catch {
+    } catch (error) {
+      rethrowTypedVaultError(error);
       throw new Error("לא הצלחנו ליצור את הכספת המוצפנת.");
     }
   }
@@ -126,13 +144,15 @@ export function createVaultStore({
     let data;
     try {
       data = readLegacyData();
-    } catch {
+    } catch (error) {
+      rethrowTypedVaultError(error);
       throw new Error("הנתונים הישנים אינם תקינים.");
     }
 
     const snapshot = snapshotMigrationState();
     let encryptedWriteSucceeded = false;
     try {
+      requireCrypto(cryptoImpl);
       const salt = cryptoImpl.getRandomValues(new Uint8Array(SALT_BYTES));
       const key = await deriveVaultKey(validatedPassphrase, salt, cryptoImpl);
       await writeAndVerifyVault(data, key, salt);
@@ -141,15 +161,17 @@ export function createVaultStore({
       activeKey = key;
       activeSalt = salt;
       return data;
-    } catch {
+    } catch (error) {
+      let migrationError = error;
       if (encryptedWriteSucceeded) {
         try {
           restoreMigrationState(snapshot);
-        } catch {
-          lock();
+        } catch (rollbackError) {
+          migrationError = rollbackError;
         }
       }
       lock();
+      rethrowTypedVaultError(migrationError);
       throw new Error("לא הצלחנו להעביר את הנתונים לכספת המוצפנת.");
     }
   }
@@ -166,7 +188,8 @@ export function createVaultStore({
       activeKey = key;
       activeSalt = salt;
       return data;
-    } catch {
+    } catch (error) {
+      rethrowTypedVaultError(error);
       throw new Error("לא הצלחנו לפתוח את הכספת. בדקו את הסיסמה ונסו שוב.");
     }
   }
@@ -175,7 +198,8 @@ export function createVaultStore({
     if (!activeKey || !activeSalt) throw new Error("הכספת נעולה. יש לפתוח אותה לפני השמירה.");
     try {
       await writeAndVerifyVault(data, activeKey, activeSalt);
-    } catch {
+    } catch (error) {
+      rethrowTypedVaultError(error);
       throw new Error("לא הצלחנו לשמור את הנתונים המוצפנים.");
     }
   }
@@ -187,24 +211,28 @@ export function createVaultStore({
 
   function reset() {
     lock();
-    let removalFailed = false;
+    let removalError = null;
     for (const key of [VAULT_STORAGE_KEY, LEGACY_PEOPLE_KEY, LEGACY_CALENDAR_KEY]) {
       try {
-        storage.removeItem(key);
-      } catch {
-        removalFailed = true;
+        removeStorage(key);
+      } catch (error) {
+        removalError ??= error;
       }
     }
     try {
+      const vault = readStorage(VAULT_STORAGE_KEY);
+      const people = readStorage(LEGACY_PEOPLE_KEY);
+      const calendar = readStorage(LEGACY_CALENDAR_KEY);
       if (
-        removalFailed ||
-        readStorage(VAULT_STORAGE_KEY) !== null ||
-        readStorage(LEGACY_PEOPLE_KEY) !== null ||
-        readStorage(LEGACY_CALENDAR_KEY) !== null
+        removalError ||
+        vault !== null ||
+        people !== null ||
+        calendar !== null
       ) {
         throw new Error("reset failed");
       }
-    } catch {
+    } catch (error) {
+      rethrowTypedVaultError(removalError ?? error);
       throw new Error("לא הצלחנו לאפס את הכספת.");
     }
   }
@@ -213,7 +241,23 @@ export function createVaultStore({
     try {
       return storage.getItem(key);
     } catch {
-      throw new Error("לא הצלחנו לגשת לאחסון המקומי.");
+      throw new VaultStoreError(VAULT_ERROR_CODES.STORAGE_ACCESS, STORAGE_ACCESS_MESSAGE);
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      storage.setItem(key, value);
+    } catch {
+      throw new VaultStoreError(VAULT_ERROR_CODES.STORAGE_WRITE, STORAGE_WRITE_MESSAGE);
+    }
+  }
+
+  function removeStorage(key) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      throw new VaultStoreError(VAULT_ERROR_CODES.STORAGE_WRITE, STORAGE_WRITE_MESSAGE);
     }
   }
 
@@ -245,19 +289,18 @@ export function createVaultStore({
   }
 
   function removeAndVerifyLegacyData() {
-    let removalFailed = false;
+    let removalError = null;
     for (const key of [LEGACY_PEOPLE_KEY, LEGACY_CALENDAR_KEY]) {
       try {
-        storage.removeItem(key);
-      } catch {
-        removalFailed = true;
+        removeStorage(key);
+      } catch (error) {
+        removalError ??= error;
       }
     }
-    if (
-      removalFailed ||
-      readStorage(LEGACY_PEOPLE_KEY) !== null ||
-      readStorage(LEGACY_CALENDAR_KEY) !== null
-    ) {
+    const people = readStorage(LEGACY_PEOPLE_KEY);
+    const calendar = readStorage(LEGACY_CALENDAR_KEY);
+    if (removalError || people !== null || calendar !== null) {
+      if (removalError) throw removalError;
       throw new Error("legacy removal failed");
     }
   }
@@ -284,8 +327,8 @@ export function createVaultStore({
   }
 
   function restoreStorageValue(key, value) {
-    if (value === null) storage.removeItem(key);
-    else storage.setItem(key, value);
+    if (value === null) removeStorage(key);
+    else writeStorage(key, value);
   }
 
   async function writeAndVerifyVault(data, key, salt) {
@@ -294,7 +337,7 @@ export function createVaultStore({
     try {
       const serialized = JSON.stringify(await sealVaultData(data, key, salt, cryptoImpl));
       attemptedWrite = true;
-      storage.setItem(VAULT_STORAGE_KEY, serialized);
+      writeStorage(VAULT_STORAGE_KEY, serialized);
       const readBack = readStorage(VAULT_STORAGE_KEY);
       if (readBack !== serialized) throw new Error("vault read-back failed");
       const verifiedEnvelope = readSerializedEnvelope();
@@ -306,8 +349,7 @@ export function createVaultStore({
   }
 
   function restorePreviousEnvelope(previousEnvelope) {
-    if (previousEnvelope === null) storage.removeItem(VAULT_STORAGE_KEY);
-    else storage.setItem(VAULT_STORAGE_KEY, previousEnvelope);
+    restoreStorageValue(VAULT_STORAGE_KEY, previousEnvelope);
   }
 
   return {
@@ -332,8 +374,12 @@ function requireCrypto(cryptoImpl) {
     typeof cryptoImpl.subtle.encrypt !== "function" ||
     typeof cryptoImpl.subtle.decrypt !== "function"
   ) {
-    throw new Error("הדפדפן אינו תומך בהצפנה הנדרשת.");
+    throw new VaultStoreError(VAULT_ERROR_CODES.CRYPTO_UNSUPPORTED, CRYPTO_UNSUPPORTED_MESSAGE);
   }
+}
+
+function rethrowTypedVaultError(error) {
+  if (error instanceof VaultStoreError) throw error;
 }
 
 function validateVaultEnvelope(envelope) {
