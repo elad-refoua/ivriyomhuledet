@@ -41,6 +41,11 @@ const hebrewYearInput = document.getElementById("hebrew-year");
 const hebrewDatePreview = document.getElementById("hebrew-date-preview");
 const reminderInput = document.getElementById("reminder");
 const formMessage = document.getElementById("form-message");
+const formErrorSummary = document.getElementById("form-error-summary");
+const formErrorList = document.getElementById("form-error-list");
+const personNameError = document.getElementById("person-name-error");
+const gregorianDateError = document.getElementById("gregorian-date-error");
+const hebrewDateError = document.getElementById("hebrew-date-error");
 const submitLabel = document.getElementById("submit-label");
 const cancelEditButton = document.getElementById("cancel-edit");
 const emptyState = document.getElementById("empty-state");
@@ -88,6 +93,13 @@ const vaultResetConfirm = document.getElementById("vault-reset-confirm");
 const vaultResetCancel = document.getElementById("vault-reset-cancel");
 const vaultResetApprove = document.getElementById("vault-reset-approve");
 const birthdaySubmit = form.querySelector('button[type="submit"]');
+const fieldErrorPairs = [
+  [nameInput, personNameError],
+  [gregorianInput, gregorianDateError],
+  [hebrewDayInput, hebrewDateError],
+  [hebrewMonthInput, hebrewDateError],
+  [hebrewYearInput, hebrewDateError],
+];
 
 const vaultStore = createVaultStore();
 let people = [];
@@ -141,23 +153,52 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (birthdaySubmit.disabled) return;
   hideFormMessage();
+  clearFormErrors();
+  const errors = [];
+  const name = nameInput.value.trim();
+  if (!name) errors.push(setFieldError(nameInput, personNameError, "נא להזין שם."));
+
+  const mode = form.elements.dateMode.value;
+  let birth;
+  if (mode === "gregorian") {
+    try {
+      birth = birthFromGregorian(gregorianInput.value, afterSunsetInput.checked);
+    } catch (error) {
+      errors.push(setFieldError(
+        gregorianInput,
+        gregorianDateError,
+        error instanceof Error ? error.message : "נא להזין תאריך לידה לועזי מלא."
+      ));
+    }
+  } else {
+    const year = parseHebrewYear(hebrewYearInput.value);
+    if (!Number.isInteger(year) || year < 5000) {
+      errors.push(setFieldError(
+        hebrewYearInput,
+        hebrewDateError,
+        "נא להזין שנת לידה באותיות, למשל תשמ״ט, או במספרים: 5749."
+      ));
+    } else {
+      try {
+        birth = birthFromHebrew(hebrewDayInput.value, hebrewMonthInput.value, hebrewYearInput.value);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "התאריך העברי אינו תקין.";
+        const control = message.includes("אדר ב׳") ? hebrewMonthInput : hebrewDayInput;
+        errors.push(setFieldError(control, hebrewDateError, message));
+      }
+    }
+  }
+
+  if (errors.length) {
+    showFormErrorSummary(errors);
+    return;
+  }
+
   let saveAttempted = false;
-  birthdaySubmit.disabled = true;
   const operationEpoch = lifecycleEpoch;
+  const editingAtSubmit = editingId;
 
   try {
-    const name = nameInput.value.trim();
-    if (!name) {
-      nameInput.focus();
-      throw new Error("נא להזין שם.");
-    }
-
-    const mode = form.elements.dateMode.value;
-    const birth = mode === "gregorian"
-      ? birthFromGregorian(gregorianInput.value, afterSunsetInput.checked)
-      : birthFromHebrew(hebrewDayInput.value, hebrewMonthInput.value, hebrewYearInput.value);
-
-    const editingAtSubmit = editingId;
     const person = {
       id: editingAtSubmit || createId(),
       name,
@@ -167,6 +208,9 @@ form.addEventListener("submit", async (event) => {
 
     invalidateSyncAfterBirthdayMutation();
     saveAttempted = true;
+    birthdaySubmit.disabled = true;
+    form.setAttribute("aria-busy", "true");
+    submitLabel.textContent = editingAtSubmit ? "שומר שינויים…" : "מוסיף לרשימה…";
     await persistState((currentPeople) => editingAtSubmit
       ? currentPeople.map((item) => (item.id === editingAtSubmit ? person : item))
       : [...currentPeople, person]);
@@ -183,23 +227,41 @@ form.addEventListener("submit", async (event) => {
     if (form.elements.dateMode.value === "gregorian" && !gregorianInput.value) gregorianInput.focus();
     if (form.elements.dateMode.value === "hebrew" && !hebrewYearInput.value.trim()) hebrewYearInput.focus();
   } finally {
-    if (lifecycleEpoch === operationEpoch && !resetInProgress) birthdaySubmit.disabled = false;
+    form.removeAttribute("aria-busy");
+    if (lifecycleEpoch === operationEpoch && !resetInProgress) {
+      birthdaySubmit.disabled = false;
+      submitLabel.textContent = editingId ? "שמור שינויים" : "הוסף לרשימה";
+    }
   }
 });
 
 form.addEventListener("change", (event) => {
-  if (event.target.name === "dateMode") updateMode();
+  if (event.target.name === "dateMode") {
+    clearFormErrors();
+    updateMode();
+  }
   if (event.target === hebrewYearInput) updateHebrewMonths();
-  if ([hebrewDayInput, hebrewMonthInput, hebrewYearInput].includes(event.target)) updateHebrewPreview();
-  if ([gregorianInput, afterSunsetInput].includes(event.target)) updateGregorianPreview();
+  if ([hebrewDayInput, hebrewMonthInput, hebrewYearInput].includes(event.target)) {
+    clearHebrewDateError();
+    updateHebrewPreview();
+  }
+  if ([gregorianInput, afterSunsetInput].includes(event.target)) {
+    clearFieldError(gregorianInput, gregorianDateError);
+    updateGregorianPreview();
+  }
 });
 
 gregorianInput.addEventListener("input", updateGregorianPreview);
+nameInput.addEventListener("input", () => clearFieldError(nameInput, personNameError));
+gregorianInput.addEventListener("input", () => clearFieldError(gregorianInput, gregorianDateError));
 
 hebrewYearInput.addEventListener("input", () => {
+  clearHebrewDateError();
   updateHebrewMonths();
   updateHebrewPreview();
 });
+hebrewDayInput.addEventListener("change", clearHebrewDateError);
+hebrewMonthInput.addEventListener("change", clearHebrewDateError);
 
 peopleList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action]");
@@ -622,6 +684,58 @@ function hideVaultError() {
   vaultError.textContent = "";
 }
 
+function clearFormErrors() {
+  formErrorSummary.hidden = true;
+  formErrorList.replaceChildren();
+  for (const [control, errorElement] of fieldErrorPairs) {
+    control.removeAttribute("aria-invalid");
+    errorElement.hidden = true;
+    errorElement.textContent = "";
+  }
+}
+
+function clearFieldError(control, errorElement) {
+  control.removeAttribute("aria-invalid");
+  errorElement.hidden = true;
+  errorElement.textContent = "";
+  removeFormSummaryError(control);
+}
+
+function clearHebrewDateError() {
+  for (const control of [hebrewDayInput, hebrewMonthInput, hebrewYearInput]) {
+    control.removeAttribute("aria-invalid");
+    removeFormSummaryError(control);
+  }
+  hebrewDateError.hidden = true;
+  hebrewDateError.textContent = "";
+}
+
+function removeFormSummaryError(control) {
+  const link = formErrorList.querySelector(`a[href="#${control.id}"]`);
+  link?.closest("li")?.remove();
+  if (!formErrorList.childElementCount) formErrorSummary.hidden = true;
+}
+
+function setFieldError(control, errorElement, message) {
+  control.setAttribute("aria-invalid", "true");
+  errorElement.textContent = message;
+  errorElement.hidden = false;
+  return { control, message };
+}
+
+function showFormErrorSummary(errors) {
+  for (const error of errors) {
+    const item = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = `#${error.control.id}`;
+    link.textContent = error.message;
+    item.append(link);
+    formErrorList.append(item);
+  }
+  formErrorSummary.hidden = false;
+  formErrorSummary.focus();
+}
+
 function vaultErrorMessage(error) {
   if (error instanceof Error && /[\u0590-\u05ff]/u.test(error.message)) return error.message;
   return "לא הצלחנו לפתוח את הכספת. נסו שוב.";
@@ -690,7 +804,7 @@ function updateHebrewPreview() {
 
   try {
     const birth = birthFromHebrew(dd, mm, yy);
-    hebrewDatePreview.innerHTML = `כך יישמר: <strong>${formatHebrewDate(birth, true)}</strong>`;
+    hebrewDatePreview.innerHTML = `✓ כך יישמר: <strong>${formatHebrewDate(birth, true)}</strong>`;
     hebrewDatePreview.hidden = false;
   } catch {
     hebrewDatePreview.hidden = true;
@@ -705,7 +819,7 @@ function updateGregorianPreview() {
 
   try {
     const birth = birthFromGregorian(gregorianInput.value, afterSunsetInput.checked);
-    gregorianDatePreview.innerHTML = `התאריך העברי: <strong>${formatHebrewDate(birth, true)}</strong>`;
+    gregorianDatePreview.innerHTML = `✓ התאריך העברי: <strong>${formatHebrewDate(birth, true)}</strong>`;
     gregorianDatePreview.hidden = false;
   } catch {
     gregorianDatePreview.hidden = true;
@@ -846,6 +960,7 @@ function resetForm() {
   hebrewYearInput.value = "";
   updateHebrewMonths();
   updateMode();
+  clearFormErrors();
   hideFormMessage();
 }
 

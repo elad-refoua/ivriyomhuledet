@@ -122,6 +122,21 @@ assert.match(indexHtml, /מוגן במכשיר הזה/);
 assert.match(appSource, /function focusAfterVaultOpen\(/);
 assert.match(appSource, /appShell\.dataset\.listState/);
 assert.match(appSource, /setAttribute\("aria-current", "step"\)/);
+for (const id of [
+  "form-error-summary",
+  "form-error-list",
+  "person-name-error",
+  "gregorian-date-error",
+  "hebrew-date-error",
+]) {
+  assert.match(indexHtml, new RegExp(`id="${id}"`), `missing form error target: ${id}`);
+}
+assert.match(indexHtml, /<details class="after-sunset-help">/);
+assert.match(appSource, /function clearFormErrors\(/);
+assert.match(appSource, /function setFieldError\(/);
+assert.match(appSource, /function showFormErrorSummary\(/);
+assert.match(appSource, /setAttribute\("aria-invalid", "true"\)/);
+assert.match(appSource, /submitLabel\.textContent = editingAtSubmit \? "שומר שינויים…" : "מוסיף לרשימה…"/);
 assert.match(stylesSource, /\.privacy-pill\s*\{[^}]*min-height:\s*44px/s);
 assert.match(
   stylesSource,

@@ -426,6 +426,12 @@ button:disabled {
   box-shadow: 0 0 0 4px rgba(70, 91, 234, 0.12);
 }
 
+.field input[aria-invalid="true"],
+.field select[aria-invalid="true"] {
+  border-color: var(--red-700);
+  box-shadow: 0 0 0 3px var(--red-100);
+}
+
 .field input::placeholder {
   color: #9ca3b7;
 }
@@ -435,6 +441,42 @@ button:disabled {
   font-size: 0.77rem;
   font-weight: 450;
   line-height: 1.45;
+}
+
+.field-error {
+  min-height: 1.3em;
+  color: var(--red-700);
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.form-error-summary {
+  padding: 14px 16px;
+  border: 1px solid #d77a8d;
+  border-radius: var(--radius-sm);
+  color: var(--red-700);
+  background: var(--red-100);
+  line-height: 1.5;
+}
+
+.form-error-summary ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding-inline-start: 20px;
+}
+
+.form-error-summary a {
+  color: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.form-error-summary a:focus-visible {
+  outline: 3px solid var(--navy-900);
+  outline-offset: 2px;
 }
 
 input[type="date"] {
@@ -543,6 +585,31 @@ input[type="date"] {
   line-height: 1.45;
 }
 
+.after-sunset-help {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f9faff;
+}
+
+.after-sunset-help summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--blue-700);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.after-sunset-help p {
+  margin: 0;
+  padding: 0 12px 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
 .hebrew-date-grid {
   display: grid;
   grid-template-columns: 0.68fr 1.12fr 1fr;
@@ -562,6 +629,12 @@ input[type="date"] {
 
 .date-preview strong {
   color: var(--blue-700);
+}
+
+#birthday-form[aria-busy="true"] .primary-button:disabled {
+  opacity: 0.82;
+  color: #fff;
+  cursor: progress;
 }
 
 .inline-message {
