@@ -69,6 +69,7 @@ const termsHtml = await readFile(resolve(root, "dist/terms.html"), "utf8");
 const accessibilityHtml = await readFile(resolve(root, "dist/accessibility.html"), "utf8");
 const googleCalendarSource = await readFile(resolve(root, "dist/google-calendar.js"), "utf8");
 const appSource = await readFile(resolve(root, "dist/app.js"), "utf8");
+const stylesSource = await readFile(resolve(root, "dist/styles.css"), "utf8");
 assert.match(appSource, /createVaultStore/);
 assert.match(appSource, /await bootstrapVault\(\)/);
 assert.match(appSource, /await vaultStore\.save/);
@@ -114,6 +115,24 @@ assert.match(indexHtml, /id="vault-passphrase"[^>]+type="password"/);
 assert.match(indexHtml, /id="vault-confirm"[^>]+type="password"/);
 assert.match(indexHtml, /id="lock-vault"/);
 assert.match(indexHtml, /id="app-shell"[^>]+inert/);
+
+for (const id of [
+  "vault-scroll",
+  "vault-security-summary",
+  "vault-passphrase-toggle",
+  "vault-confirm-toggle",
+  "vault-length-status",
+  "vault-match-status",
+]) {
+  assert.match(indexHtml, new RegExp(`id="${id}"`), `missing vault UX control: ${id}`);
+}
+assert.match(indexHtml, /aria-pressed="false"/);
+assert.match(indexHtml, /הסיסמה לא נשמרת/);
+assert.match(indexHtml, /Google מקבלת מידע רק בסנכרון יזום/);
+assert.match(appSource, /function setPasswordVisibility\(/);
+assert.match(appSource, /function updateVaultRequirements\(/);
+assert.match(stylesSource, /body:has\(\.vault-dialog\[open\]\)\s*\{[^}]*overflow:\s*hidden/s);
+assert.match(stylesSource, /@media \(max-width: 650px\)[\s\S]*\.vault-dialog[\s\S]*height:\s*100dvh/);
 
 const csp = indexHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] || "";
 assert.match(csp, /default-src 'self'/);

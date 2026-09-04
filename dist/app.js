@@ -75,6 +75,10 @@ const vaultTitle = document.getElementById("vault-title");
 const vaultCopy = document.getElementById("vault-copy");
 const vaultPassphrase = document.getElementById("vault-passphrase");
 const vaultConfirm = document.getElementById("vault-confirm");
+const vaultPassphraseToggle = document.getElementById("vault-passphrase-toggle");
+const vaultConfirmToggle = document.getElementById("vault-confirm-toggle");
+const vaultLengthStatus = document.getElementById("vault-length-status");
+const vaultMatchStatus = document.getElementById("vault-match-status");
 const vaultConfirmField = document.getElementById("vault-confirm-field");
 const vaultError = document.getElementById("vault-error");
 const vaultSubmit = document.getElementById("vault-submit");
@@ -102,6 +106,14 @@ let resetInProgress = false;
 
 vaultDialog.addEventListener("cancel", (event) => event.preventDefault());
 vaultForm.addEventListener("submit", handleVaultSubmit);
+vaultPassphraseToggle.addEventListener("click", () => {
+  setPasswordVisibility(vaultPassphrase, vaultPassphraseToggle, vaultPassphrase.type === "password");
+});
+vaultConfirmToggle.addEventListener("click", () => {
+  setPasswordVisibility(vaultConfirm, vaultConfirmToggle, vaultConfirm.type === "password");
+});
+vaultPassphrase.addEventListener("input", updateVaultRequirements);
+vaultConfirm.addEventListener("input", updateVaultRequirements);
 vaultReset.addEventListener("click", () => {
   vaultResetConfirm.hidden = false;
   vaultReset.focus();
@@ -350,6 +362,7 @@ function setVaultMode(mode) {
   vaultMode = mode;
   vaultResetConfirm.hidden = true;
   vaultConfirmField.hidden = mode === "unlock";
+  vaultMatchStatus.hidden = mode === "unlock";
   vaultConfirm.required = mode !== "unlock";
   vaultReset.hidden = mode !== "unlock";
   vaultTitle.textContent = mode === "create"
@@ -366,7 +379,29 @@ function setVaultMode(mode) {
     ? "פתיחת הכספת"
     : mode === "migrate" ? "הצפנת הרשימה ופתיחת הכספת" : "יצירת הכספת";
   vaultPassphrase.autocomplete = mode === "unlock" ? "current-password" : "new-password";
+  resetVaultInputs();
   hideVaultError();
+}
+
+function setPasswordVisibility(input, button, visible) {
+  input.type = visible ? "text" : "password";
+  button.setAttribute("aria-pressed", String(visible));
+  button.querySelector("span").textContent = visible ? "הסתרת הסיסמה" : "הצגת הסיסמה";
+}
+
+function updateVaultRequirements() {
+  const longEnough = vaultPassphrase.value.length >= 12;
+  const matches = vaultConfirm.value.length > 0 && vaultPassphrase.value === vaultConfirm.value;
+  vaultLengthStatus.dataset.state = longEnough ? "complete" : "pending";
+  vaultMatchStatus.dataset.state = matches ? "complete" : "pending";
+}
+
+function resetVaultInputs() {
+  vaultPassphrase.value = "";
+  vaultConfirm.value = "";
+  setPasswordVisibility(vaultPassphrase, vaultPassphraseToggle, false);
+  setPasswordVisibility(vaultConfirm, vaultConfirmToggle, false);
+  updateVaultRequirements();
 }
 
 function showVaultDialog() {
@@ -409,8 +444,7 @@ async function handleVaultSubmit(event) {
     vaultPassphrase.focus();
   } finally {
     if (pendingVaultOperation === trackedOperation) pendingVaultOperation = Promise.resolve();
-    vaultPassphrase.value = "";
-    vaultConfirm.value = "";
+    resetVaultInputs();
     if (!resetInProgress) vaultSubmit.disabled = false;
   }
 }

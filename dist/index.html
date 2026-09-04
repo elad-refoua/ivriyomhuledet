@@ -308,6 +308,7 @@
       aria-describedby="vault-copy"
       open
     >
+      <div id="vault-scroll">
       <section class="vault-card">
         <div class="vault-illustration" aria-hidden="true">
           <svg viewBox="0 0 96 96">
@@ -322,34 +323,48 @@
         <p id="vault-copy" class="vault-copy">
           הסיסמה שלך מצפינה את הרשימה במכשיר הזה בלבד. אם תשכחו אותה, גם בעלי האתר לא יכולים לשחזר אותה.
         </p>
+        <ul id="vault-security-summary" class="vault-security-summary" aria-label="איך הכספת שומרת על המידע">
+          <li>השמות והתאריכים מוצפנים במכשיר הזה</li>
+          <li>הסיסמה לא נשמרת ולא ניתנת לשחזור</li>
+          <li>Google מקבלת מידע רק בסנכרון יזום</li>
+        </ul>
 
         <form id="vault-form" novalidate>
           <label class="field" for="vault-passphrase">
             <span>סיסמת הכספת</span>
-            <input
-              id="vault-passphrase"
-              name="vaultPassphrase"
-              type="password"
-              autocomplete="current-password"
-              minlength="12"
-              aria-describedby="vault-passphrase-hint"
-              required
-            />
+            <span class="password-control">
+              <input
+                id="vault-passphrase"
+                name="vaultPassphrase"
+                type="password"
+                autocomplete="current-password"
+                minlength="12"
+                aria-describedby="vault-passphrase-hint vault-length-status"
+                required
+              />
+              <button id="vault-passphrase-toggle" class="password-toggle" type="button" aria-controls="vault-passphrase" aria-pressed="false"><span>הצגת הסיסמה</span></button>
+            </span>
             <small id="vault-passphrase-hint" class="field-hint">לפחות 12 תווים.</small>
           </label>
+          <p id="vault-length-status" class="requirement-status" data-state="pending">לפחות 12 תווים</p>
 
           <div id="vault-confirm-field" hidden>
             <label class="field" for="vault-confirm">
               <span>אימות הסיסמה</span>
-              <input
-                id="vault-confirm"
-                name="vaultConfirm"
-                type="password"
-                autocomplete="new-password"
-                minlength="12"
-              />
+              <span class="password-control">
+                <input
+                  id="vault-confirm"
+                  name="vaultConfirm"
+                  type="password"
+                  autocomplete="new-password"
+                  minlength="12"
+                  aria-describedby="vault-match-status"
+                />
+                <button id="vault-confirm-toggle" class="password-toggle" type="button" aria-controls="vault-confirm" aria-pressed="false"><span>הצגת הסיסמה</span></button>
+              </span>
             </label>
           </div>
+          <p id="vault-match-status" class="requirement-status" data-state="pending">שתי הסיסמאות זהות</p>
 
           <p id="vault-error" class="inline-message is-error" role="alert" aria-live="assertive" hidden></p>
 
@@ -370,6 +385,7 @@
           </section>
         </form>
       </section>
+      </div>
     </dialog>
 
     <dialog id="confirm-dialog" class="confirm-dialog">
