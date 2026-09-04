@@ -83,6 +83,24 @@ export async function runSecureStorageVerification() {
   await assert.rejects(() => store.unlock("סיסמה שגויה וארוכה 2026"));
   assert.deepEqual(await store.unlock("סיסמת בדיקה ארוכה 2026"), sampleData);
 
+  const reloadStorage = memoryStorage();
+  const initialReloadStore = createVaultStore({ storage: reloadStorage, cryptoImpl: crypto });
+  await initialReloadStore.create("סיסמת טעינה מחדש 2026", sampleData);
+  const secondPerson = {
+    id: "person-2",
+    name: "בדיקת טעינה מחדש",
+    birth: { yy: 5750, mm: 7, dd: 2 },
+    reminder: "morning-before",
+  };
+  const reloadedData = { ...sampleData, people: [...sampleData.people, secondPerson] };
+  await initialReloadStore.save(reloadedData);
+  initialReloadStore.lock();
+  const freshReloadStore = createVaultStore({ storage: reloadStorage, cryptoImpl: crypto });
+  assert.deepEqual(
+    await freshReloadStore.unlock("סיסמת טעינה מחדש 2026"),
+    reloadedData
+  );
+
   const legacyStorage = memoryStorage({
     [LEGACY_PEOPLE_KEY]: JSON.stringify(sampleData.people),
     [LEGACY_CALENDAR_KEY]: sampleData.googleCalendarId,

@@ -20,9 +20,10 @@ import {
   prepareGoogleIdentity,
   syncGoogleCalendar,
 } from "./google-calendar.js";
+import { createVaultStore } from "./secure-storage.js";
 
-const STORAGE_KEY = "ivriyomhuledet.people.v1";
 const GOOGLE_CLIENT_ID = document.body.dataset.googleClientId?.trim() || "";
+const SAVE_FAILURE_MESSAGE = "השינוי לא נשמר. המידע הקודם נשאר ללא שינוי.";
 
 const form = document.getElementById("birthday-form");
 const formTitle = document.getElementById("form-title");
@@ -64,13 +65,48 @@ const confirmTitle = document.getElementById("confirm-title");
 const confirmCopy = document.getElementById("confirm-copy");
 const toast = document.getElementById("toast");
 const flowSteps = [...document.querySelectorAll("[data-flow-step]")];
+const appShell = document.getElementById("app-shell");
+const lockButton = document.getElementById("lock-vault");
+const vaultDialog = document.getElementById("vault-dialog");
+const vaultForm = document.getElementById("vault-form");
+const vaultTitle = document.getElementById("vault-title");
+const vaultCopy = document.getElementById("vault-copy");
+const vaultPassphrase = document.getElementById("vault-passphrase");
+const vaultConfirm = document.getElementById("vault-confirm");
+const vaultConfirmField = document.getElementById("vault-confirm-field");
+const vaultError = document.getElementById("vault-error");
+const vaultSubmit = document.getElementById("vault-submit");
+const vaultReset = document.getElementById("vault-reset");
+const vaultResetConfirm = document.getElementById("vault-reset-confirm");
+const vaultResetCancel = document.getElementById("vault-reset-cancel");
+const vaultResetApprove = document.getElementById("vault-reset-approve");
+const birthdaySubmit = form.querySelector('button[type="submit"]');
 
-let people = loadPeople();
+const vaultStore = createVaultStore();
+let people = [];
+let googleCalendarId = "";
 let editingId = null;
 let pendingDelete = null;
 let isSyncing = false;
 let hasSynced = false;
 let toastTimer = null;
+let vaultMode = "unlock";
+let vaultReadyResolver = null;
+let syncRun = 0;
+
+vaultDialog.addEventListener("cancel", (event) => event.preventDefault());
+vaultForm.addEventListener("submit", handleVaultSubmit);
+vaultReset.addEventListener("click", () => {
+  vaultResetConfirm.hidden = false;
+  vaultReset.focus();
+});
+vaultResetCancel.addEventListener("click", () => {
+  vaultResetConfirm.hidden = true;
+  vaultReset.focus();
+});
+vaultResetApprove.addEventListener("click", handleVaultReset);
+
+await bootstrapVault();
 
 initializeForm();
 renderPeople();
@@ -82,9 +118,12 @@ if (isGoogleConfigured(GOOGLE_CLIENT_ID)) {
   });
 }
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (birthdaySubmit.disabled) return;
   hideFormMessage();
+  let saveAttempted = false;
+  birthdaySubmit.disabled = true;
 
   try {
     const name = nameInput.value.trim();
@@ -105,25 +144,26 @@ form.addEventListener("submit", (event) => {
       reminder: reminderInput.value,
     };
 
-    if (editingId) {
-      people = people.map((item) => (item.id === editingId ? person : item));
-      showToast(`הפרטים של ${name} עודכנו`);
-    } else {
-      people.push(person);
-      showToast(`${name} נוסף לרשימה`);
-    }
-
-    savePeople();
+    const nextPeople = editingId
+      ? people.map((item) => (item.id === editingId ? person : item))
+      : [...people, person];
+    saveAttempted = true;
+    await persistState(nextPeople);
     hasSynced = false;
     syncSuccess.hidden = true;
+    showToast(editingId ? `הפרטים של ${name} עודכנו` : `${name} נוסף לרשימה`);
     renderPeople();
     resetForm();
     nameInput.focus();
   } catch (error) {
-    const message = error instanceof Error ? error.message : "לא הצלחנו להוסיף את התאריך.";
+    const message = saveAttempted
+      ? SAVE_FAILURE_MESSAGE
+      : error instanceof Error ? error.message : "לא הצלחנו להוסיף את התאריך.";
     showFormMessage(message);
     if (form.elements.dateMode.value === "gregorian" && !gregorianInput.value) gregorianInput.focus();
     if (form.elements.dateMode.value === "hebrew" && !hebrewYearInput.value.trim()) hebrewYearInput.focus();
+  } finally {
+    birthdaySubmit.disabled = false;
   }
 });
 
@@ -168,27 +208,39 @@ clearButton.addEventListener("click", () => {
   openConfirmDialog();
 });
 
-confirmDialog.addEventListener("close", () => {
+confirmDialog.addEventListener("close", async () => {
   if (confirmDialog.returnValue !== "confirm" || !pendingDelete) {
     pendingDelete = null;
     return;
   }
 
-  if (pendingDelete.type === "person") {
-    const removed = people.find((person) => person.id === pendingDelete.id);
-    people = people.filter((person) => person.id !== pendingDelete.id);
-    if (editingId === pendingDelete.id) resetForm();
+  const deletion = pendingDelete;
+  pendingDelete = null;
+  const removed = deletion.type === "person"
+    ? people.find((person) => person.id === deletion.id)
+    : null;
+  const nextPeople = deletion.type === "person"
+    ? people.filter((person) => person.id !== deletion.id)
+    : [];
+
+  try {
+    await persistState(nextPeople);
+  } catch {
+    showToast(SAVE_FAILURE_MESSAGE);
+    showFormMessage(SAVE_FAILURE_MESSAGE);
+    return;
+  }
+
+  if (deletion.type === "person") {
+    if (editingId === deletion.id) resetForm();
     showToast(removed ? `${removed.name} הוסר מהרשימה` : "יום ההולדת הוסר");
   } else {
-    people = [];
     resetForm();
     showToast("הרשימה נמחקה");
   }
 
-  pendingDelete = null;
   hasSynced = false;
   syncSuccess.hidden = true;
-  savePeople();
   renderPeople();
 });
 
@@ -210,6 +262,7 @@ downloadButton.addEventListener("click", () => {
 
 googleActionButton.addEventListener("click", async () => {
   if (!people.length || isSyncing) return;
+  const currentSyncRun = ++syncRun;
   hideSyncError();
   syncSuccess.hidden = true;
   hasSynced = false;
@@ -223,21 +276,32 @@ googleActionButton.addEventListener("click", async () => {
     }
 
     const result = await syncGoogleCalendar(people, {
+      calendarId: googleCalendarId,
+      onCalendarReady: async (calendarId) => {
+        if (currentSyncRun !== syncRun) return;
+        if (calendarId !== googleCalendarId) {
+          await persistState(people, calendarId);
+        }
+      },
       onProgress: ({ percent, label }) => {
+        if (currentSyncRun !== syncRun) return;
         const visiblePercent = 14 + Math.round(percent * 0.86);
         setSyncing(true, label, visiblePercent);
       },
     });
 
+    if (currentSyncRun !== syncRun) return;
     hasSynced = true;
     syncSuccessCopy.textContent = `${result.eventCount} מועדים נוספו ל־20 השנים הבאות.`;
     syncSuccess.hidden = false;
     showToast("הסנכרון הסתיים בהצלחה");
   } catch (error) {
+    if (currentSyncRun !== syncRun) return;
     const message = error instanceof Error ? error.message : "הסנכרון נכשל. נסו שוב.";
     showSyncError(message);
     if (message.includes("פג")) disconnectGoogle();
   } finally {
+    if (currentSyncRun !== syncRun) return;
     setSyncing(false);
     updateGoogleUI();
   }
@@ -251,6 +315,167 @@ disconnectButton.addEventListener("click", () => {
   updateGoogleUI();
   showToast("חשבון Google נותק");
 });
+
+lockButton.addEventListener("click", lockApplication);
+
+function bootstrapVault() {
+  return new Promise((resolve) => {
+    vaultReadyResolver = resolve;
+    let status;
+    try {
+      status = vaultStore.status();
+    } catch {
+      status = "locked";
+      showVaultError("לא הצלחנו לגשת לאחסון המקומי. נסו לרענן את הדף.");
+    }
+
+    setVaultMode(status === "legacy" ? "migrate" : status === "empty" ? "create" : "unlock");
+    appShell.setAttribute("aria-hidden", "true");
+    appShell.setAttribute("inert", "");
+    lockButton.hidden = true;
+    showVaultDialog();
+    vaultPassphrase.focus();
+  });
+}
+
+function setVaultMode(mode) {
+  vaultMode = mode;
+  vaultResetConfirm.hidden = true;
+  vaultConfirmField.hidden = mode === "unlock";
+  vaultConfirm.required = mode !== "unlock";
+  vaultReset.hidden = mode !== "unlock";
+  vaultTitle.textContent = mode === "create"
+    ? "יוצרים כספת לרשימת ימי ההולדת"
+    : mode === "migrate"
+      ? "מעבירים את הרשימה לכספת מוצפנת"
+      : "פותחים את רשימת ימי ההולדת";
+  vaultCopy.textContent = mode === "create"
+    ? "בחרו סיסמה שתצפין את הרשימה במכשיר הזה בלבד. אם תשכחו אותה, גם בעלי האתר לא יכולים לשחזר את המידע."
+    : mode === "migrate"
+      ? "מצאנו רשימת ימי הולדת קיימת. הסיסמה שתבחרו תצפין אותה במכשיר הזה, והנתונים הישנים יימחקו רק אחרי בדיקת ההצפנה."
+      : "הסיסמה שלך מצפינה את הרשימה במכשיר הזה בלבד. אם תשכחו אותה, גם בעלי האתר לא יכולים לשחזר אותה.";
+  vaultSubmit.textContent = mode === "unlock"
+    ? "פתיחת הכספת"
+    : mode === "migrate" ? "הצפנת הרשימה ופתיחת הכספת" : "יצירת הכספת";
+  vaultPassphrase.autocomplete = mode === "unlock" ? "current-password" : "new-password";
+  hideVaultError();
+}
+
+function showVaultDialog() {
+  if (vaultDialog.open) vaultDialog.close();
+  vaultDialog.showModal();
+}
+
+async function handleVaultSubmit(event) {
+  event.preventDefault();
+  if (vaultSubmit.disabled) return;
+  hideVaultError();
+  vaultSubmit.disabled = true;
+
+  try {
+    const passphrase = vaultPassphrase.value;
+    if (vaultMode !== "unlock" && passphrase !== vaultConfirm.value) {
+      throw new Error("הסיסמאות אינן תואמות.");
+    }
+
+    let data;
+    if (vaultMode === "create") {
+      data = { version: 1, people: [], googleCalendarId: "" };
+      await vaultStore.create(passphrase, data);
+    } else if (vaultMode === "migrate") {
+      data = await vaultStore.migrate(passphrase);
+    } else {
+      data = await vaultStore.unlock(passphrase);
+    }
+
+    people = data.people;
+    googleCalendarId = data.googleCalendarId;
+    appShell.removeAttribute("inert");
+    appShell.removeAttribute("aria-hidden");
+    lockButton.hidden = false;
+    vaultResetConfirm.hidden = true;
+    vaultDialog.close();
+    vaultReadyResolver?.();
+    vaultReadyResolver = null;
+  } catch (error) {
+    showVaultError(vaultErrorMessage(error));
+    vaultPassphrase.focus();
+  } finally {
+    vaultPassphrase.value = "";
+    vaultConfirm.value = "";
+    vaultSubmit.disabled = false;
+  }
+}
+
+async function handleVaultReset() {
+  if (vaultResetApprove.disabled) return;
+  vaultResetApprove.disabled = true;
+  hideVaultError();
+  try {
+    vaultStore.reset();
+    syncRun += 1;
+    people = [];
+    googleCalendarId = "";
+    editingId = null;
+    pendingDelete = null;
+    hasSynced = false;
+    isSyncing = false;
+    peopleList.replaceChildren();
+    setVaultMode("create");
+    vaultPassphrase.focus();
+  } catch {
+    showVaultError("לא הצלחנו לאפס את הכספת.");
+  } finally {
+    vaultResetApprove.disabled = false;
+  }
+}
+
+function lockApplication() {
+  syncRun += 1;
+  disconnectGoogle();
+  people = [];
+  googleCalendarId = "";
+  editingId = null;
+  pendingDelete = null;
+  hasSynced = false;
+  isSyncing = false;
+  syncSuccess.hidden = true;
+  hideSyncError();
+  peopleList.replaceChildren();
+  renderPeople();
+  vaultStore.lock();
+  appShell.setAttribute("aria-hidden", "true");
+  appShell.setAttribute("inert", "");
+  lockButton.hidden = true;
+  setVaultMode("unlock");
+  showVaultDialog();
+  vaultPassphrase.focus();
+}
+
+async function persistState(nextPeople, nextCalendarId = googleCalendarId) {
+  await vaultStore.save({
+    version: 1,
+    people: nextPeople,
+    googleCalendarId: nextCalendarId,
+  });
+  people = nextPeople;
+  googleCalendarId = nextCalendarId;
+}
+
+function showVaultError(message) {
+  vaultError.textContent = message;
+  vaultError.hidden = false;
+}
+
+function hideVaultError() {
+  vaultError.hidden = true;
+  vaultError.textContent = "";
+}
+
+function vaultErrorMessage(error) {
+  if (error instanceof Error && /[\u0590-\u05ff]/u.test(error.message)) return error.message;
+  return "לא הצלחנו לפתוח את הכספת. נסו שוב.";
+}
 
 function initializeForm() {
   const now = new Date();
@@ -587,32 +812,6 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     toast.hidden = true;
   }, 2600);
-}
-
-function loadPeople() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(stored)) return [];
-    return stored.filter(isValidPerson);
-  } catch {
-    return [];
-  }
-}
-
-function savePeople() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(people));
-}
-
-function isValidPerson(value) {
-  return Boolean(
-    value &&
-      typeof value.id === "string" &&
-      typeof value.name === "string" &&
-      value.birth &&
-      Number.isInteger(value.birth.yy) &&
-      Number.isInteger(value.birth.mm) &&
-      Number.isInteger(value.birth.dd)
-  );
 }
 
 function reminderLabel(value) {
