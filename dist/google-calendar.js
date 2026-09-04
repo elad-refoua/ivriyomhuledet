@@ -86,6 +86,10 @@ export function clearGoogleSession() {
   connectionGeneration += 1;
 }
 
+export function cancelGoogleSync() {
+  connectionGeneration += 1;
+}
+
 export async function syncGoogleCalendar(
   people,
   { calendarId = "", onCalendarReady, onProgress } = {}

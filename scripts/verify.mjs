@@ -16,6 +16,7 @@ import {
   parseHebrewYear,
 } from "../dist/calendar.js";
 import {
+  cancelGoogleSync,
   clearGoogleSession,
   connectGoogle,
   disconnectGoogle,
@@ -80,6 +81,11 @@ assert.match(appSource, /await waitForPendingWrites\(\)/);
 assert.match(appSource, /pendingVaultOperation/);
 assert.match(appSource, /operationEpoch !== lifecycleEpoch/);
 assert.match(appSource, /clearGoogleSession\(\)/);
+assert.match(appSource, /invalidateSyncAfterBirthdayMutation/);
+assert.ok(
+  (appSource.match(/invalidateSyncAfterBirthdayMutation\(\);/g) || []).length >= 2,
+  "birthday mutations must invalidate sync after successful persistence"
+);
 assert.doesNotMatch(appSource, /localStorage/);
 assert.doesNotMatch(appSource, /function loadPeople/);
 assert.doesNotMatch(appSource, /function savePeople/);
@@ -114,6 +120,7 @@ assert.doesNotMatch(googleCalendarSource, /localStorage/);
 assert.doesNotMatch(googleCalendarSource, /sessionStorage/);
 assert.doesNotMatch(googleCalendarSource, /ivriyomhuledet\.googleCalendarId/);
 assert.match(googleCalendarSource, /clearGoogleSession/);
+assert.match(googleCalendarSource, /cancelGoogleSync/);
 assert.match(googleCalendarSource, /requestGeneration/);
 assert.match(googleCalendarSource, /requestGeneration !== connectionGeneration/);
 assert.match(appSource, /typeof nextPeople === "function"/);
@@ -249,6 +256,32 @@ clearGoogleSession();
 deferredTokenCallback({ access_token: "stale-access-token" });
 await assert.rejects(() => pendingConnection, /החיבור ל־Google בוטל/);
 assert.equal(isGoogleConnected(), false);
+
+globalThis.window.google.accounts.oauth2.initTokenClient = ({ callback }) => ({
+  requestAccessToken: () => callback({ access_token: "test-access-token" }),
+});
+let releaseMutationSync;
+let mutationSyncStarted = false;
+const mutationSyncGate = new Promise((resolve) => {
+  releaseMutationSync = resolve;
+});
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/mutation-calendar") && !options.method) {
+    mutationSyncStarted = true;
+    await mutationSyncGate;
+    return jsonResponse({ id: "mutation-calendar" });
+  }
+  throw new Error(`Unexpected mutation cancellation request: ${options.method || "GET"} ${url}`);
+};
+await connectGoogle("verification.apps.googleusercontent.com");
+const pendingMutationSync = syncGoogleCalendar([person], { calendarId: "mutation-calendar" });
+while (!mutationSyncStarted) await new Promise((resolve) => setImmediate(resolve));
+cancelGoogleSync();
+assert.equal(isGoogleConnected(), true);
+releaseMutationSync();
+await assert.rejects(() => pendingMutationSync, /החיבור ל־Google בוטל/);
+assert.equal(isGoogleConnected(), true);
+disconnectGoogle();
 
 console.log("✓ בדיקות עבריולדת עברו בהצלחה");
 

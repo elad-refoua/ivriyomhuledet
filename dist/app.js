@@ -13,6 +13,7 @@ import {
   relativeDayLabel,
 } from "./calendar.js?v=20260904";
 import {
+  cancelGoogleSync,
   clearGoogleSession,
   connectGoogle,
   disconnectGoogle,
@@ -155,8 +156,7 @@ form.addEventListener("submit", async (event) => {
     await persistState((currentPeople) => editingAtSubmit
       ? currentPeople.map((item) => (item.id === editingAtSubmit ? person : item))
       : [...currentPeople, person]);
-    hasSynced = false;
-    syncSuccess.hidden = true;
+    invalidateSyncAfterBirthdayMutation();
     showToast(editingAtSubmit ? `הפרטים של ${name} עודכנו` : `${name} נוסף לרשימה`);
     renderPeople();
     resetForm();
@@ -234,6 +234,7 @@ confirmDialog.addEventListener("close", async () => {
     return;
   }
 
+  invalidateSyncAfterBirthdayMutation();
   if (deletion.type === "person") {
     const removed = people.find((person) => person.id === deletion.id);
     if (editingId === deletion.id) resetForm();
@@ -512,6 +513,15 @@ function lifecycleAbort() {
 
 function isLifecycleAbort(error) {
   return error?.code === "VAULT_LIFECYCLE_ABORTED";
+}
+
+function invalidateSyncAfterBirthdayMutation() {
+  syncRun += 1;
+  cancelGoogleSync();
+  setSyncing(false);
+  hasSynced = false;
+  syncSuccess.hidden = true;
+  hideSyncError();
 }
 
 function clearApplicationState() {
@@ -857,6 +867,9 @@ function setSyncing(active, label = "", percent = 0) {
   if (active) {
     progressText.textContent = label;
     progressBar.style.width = `${Math.max(5, Math.min(100, percent))}%`;
+  } else {
+    progressText.textContent = "";
+    progressBar.style.width = "0%";
   }
   updateGoogleUI();
 }
