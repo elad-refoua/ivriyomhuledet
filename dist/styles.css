@@ -1122,6 +1122,30 @@ input[type="date"] {
   line-height: 1.4;
 }
 
+.sync-count-copy {
+  margin: 16px 0 0;
+  color: var(--navy-900);
+  font-size: 0.86rem;
+}
+
+.sync-count-copy strong {
+  font-size: 1rem;
+}
+
+.sync-privacy-points {
+  display: grid;
+  gap: 8px;
+  margin: 11px 0 18px;
+  padding-right: 20px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.sync-privacy-points li::marker {
+  color: var(--green-700);
+}
+
 .status-badge {
   padding: 5px 9px;
   border-radius: 999px;
@@ -1171,7 +1195,7 @@ input[type="date"] {
 .sync-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 10px;
   color: var(--muted);
@@ -1207,8 +1231,12 @@ input[type="date"] {
 }
 
 .alternative-action .text-link {
-  min-height: 32px;
+  min-height: 44px;
   font-size: inherit;
+}
+
+.sync-footer .quiet-button {
+  min-height: 44px;
 }
 
 .sync-progress {
@@ -1219,7 +1247,8 @@ input[type="date"] {
 }
 
 .progress-track {
-  height: 7px;
+  height: 8px;
+  min-height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: #dde3fb;

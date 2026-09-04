@@ -148,6 +148,15 @@ assert.match(stylesSource, /\.icon-button\s*\{[^}]*min-height:\s*44px/s);
 assert.match(stylesSource, /\.icon-button\s*\{[^}]*min-width:\s*44px/s);
 assert.match(indexHtml, /הוספת יום הולדת ראשון/);
 assert.match(appSource, /people\.length === 1 \? "יום הולדת אחד" : `\$\{people\.length\} ימי הולדת`/);
+for (const id of ["sync-event-count", "sync-privacy-points", "sync-progressbar"]) {
+  assert.match(indexHtml, new RegExp(`id="${id}"`), `missing sync explanation: ${id}`);
+}
+assert.match(indexHtml, /יומן נפרד בשם ”ימי הולדת עבריים”/);
+assert.match(indexHtml, /לא נקרא את היומנים האחרים/);
+assert.match(indexHtml, /המידע נשלח ל־Google רק אחרי לחיצה על הכפתור/);
+assert.match(appSource, /syncEventCount\.textContent = String\(people\.length \* 20\)/);
+assert.match(appSource, /setAttribute\("aria-valuenow", String\(boundedPercent\)\)/);
+assert.match(appSource, /removeAttribute\("aria-valuenow"\)/);
 
 for (const id of [
   "vault-scroll",

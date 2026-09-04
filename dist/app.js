@@ -57,11 +57,13 @@ const downloadButton = document.getElementById("download-calendar");
 const downloadStatus = document.getElementById("download-status");
 const syncCard = document.getElementById("sync-card");
 const syncDescription = document.getElementById("sync-description");
+const syncEventCount = document.getElementById("sync-event-count");
 const connectionBadge = document.getElementById("connection-badge");
 const googleActionButton = document.getElementById("google-action");
 const googleButtonLabel = document.getElementById("google-button-label");
 const disconnectButton = document.getElementById("disconnect-google");
 const syncProgress = document.getElementById("sync-progress");
+const syncProgressbar = document.getElementById("sync-progressbar");
 const progressBar = document.getElementById("progress-bar");
 const progressText = document.getElementById("progress-text");
 const syncSuccess = document.getElementById("sync-success");
@@ -378,7 +380,10 @@ googleActionButton.addEventListener("click", async () => {
     showToast("הסנכרון הסתיים בהצלחה");
   } catch (error) {
     if (currentSyncRun !== syncRun) return;
-    const message = error instanceof Error ? error.message : "הסנכרון נכשל. נסו שוב.";
+    const rawMessage = error instanceof Error ? error.message : "הסנכרון נכשל. נסו שוב.";
+    const message = rawMessage.includes("חלון החיבור נסגר")
+      ? `${rawMessage} אפשר לנסות שוב כשתרצו.`
+      : rawMessage;
     showSyncError(message);
     if (message.includes("פג")) disconnectGoogle();
   } finally {
@@ -659,6 +664,8 @@ function clearApplicationState() {
   isSyncing = false;
   syncProgress.hidden = true;
   progressBar.style.width = "0%";
+  syncProgressbar.removeAttribute("aria-valuenow");
+  syncProgressbar.removeAttribute("aria-valuetext");
   progressText.textContent = "";
   syncSuccess.hidden = true;
   hideSyncError();
@@ -993,6 +1000,7 @@ function updateGoogleUI() {
   const configured = isGoogleConfigured(GOOGLE_CLIENT_ID);
   const connected = isGoogleConnected();
 
+  syncEventCount.textContent = String(people.length * 20);
   syncCard.classList.toggle("is-ready", hasPeople);
   connectionBadge.classList.toggle("is-connected", connected && !hasSynced);
   connectionBadge.classList.toggle("is-synced", hasSynced);
@@ -1001,7 +1009,7 @@ function updateGoogleUI() {
   if (!hasPeople) {
     syncDescription.textContent = "הוסיפו אדם אחד לפחות כדי להמשיך.";
     connectionBadge.textContent = connected ? "מחובר" : "לא מחובר";
-    googleButtonLabel.textContent = "חבר את Google וסנכרן";
+    googleButtonLabel.textContent = "חיבור Google והוספת המועדים";
     googleActionButton.disabled = true;
   } else if (!configured) {
     syncDescription.textContent = "הרשימה מוכנה. חיבור Google יופעל לפני הפרסום.";
@@ -1011,12 +1019,12 @@ function updateGoogleUI() {
   } else if (connected) {
     syncDescription.textContent = `יומן נפרד עם ${people.length} ${people.length === 1 ? "אדם" : "אנשים"} ו־20 שנים קדימה.`;
     connectionBadge.textContent = hasSynced ? "מסונכרן" : "מחובר";
-    googleButtonLabel.textContent = hasSynced ? "סנכרן שוב" : "סנכרן עכשיו";
+    googleButtonLabel.textContent = hasSynced ? "סנכרון מחדש" : "סנכרון עכשיו";
     googleActionButton.disabled = isSyncing;
   } else {
     syncDescription.textContent = `נוסיף ${people.length * 20} מועדים ליומן נפרד בחשבון שלך.`;
     connectionBadge.textContent = "לא מחובר";
-    googleButtonLabel.textContent = "חבר את Google וסנכרן";
+    googleButtonLabel.textContent = "חיבור Google והוספת המועדים";
     googleActionButton.disabled = isSyncing;
   }
 
@@ -1059,11 +1067,16 @@ function setSyncing(active, label = "", percent = 0) {
   isSyncing = active;
   syncProgress.hidden = !active;
   if (active) {
+    const boundedPercent = Math.max(0, Math.min(100, Math.round(percent)));
     progressText.textContent = label;
-    progressBar.style.width = `${Math.max(5, Math.min(100, percent))}%`;
+    progressBar.style.width = `${Math.max(5, boundedPercent)}%`;
+    syncProgressbar.setAttribute("aria-valuenow", String(boundedPercent));
+    syncProgressbar.setAttribute("aria-valuetext", label);
   } else {
     progressText.textContent = "";
     progressBar.style.width = "0%";
+    syncProgressbar.removeAttribute("aria-valuenow");
+    syncProgressbar.removeAttribute("aria-valuetext");
   }
   updateGoogleUI();
 }
