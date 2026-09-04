@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import {
   LEGACY_CALENDAR_KEY,
   LEGACY_PEOPLE_KEY,
-  MIN_PASSPHRASE_LENGTH,
   PBKDF2_ITERATIONS,
   VAULT_STORAGE_KEY,
   VAULT_ERROR_CODES,
@@ -45,8 +44,8 @@ const sampleData = {
 
 export async function runSecureStorageVerification() {
   assert.equal(PBKDF2_ITERATIONS, 600_000);
-  assert.equal(MIN_PASSPHRASE_LENGTH, 12);
-  assert.throws(() => validatePassphrase("קצרה"), /12/);
+  assert.equal(validatePassphrase("123456"), "123456");
+  assert.throws(() => validatePassphrase("12345"), /6/);
   assert.throws(() => validatePassphrase("            "), /אות/);
 
   const salt = crypto.getRandomValues(new Uint8Array(16));

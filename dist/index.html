@@ -359,15 +359,15 @@
                 name="vaultPassphrase"
                 type="password"
                 autocomplete="current-password"
-                minlength="12"
+                minlength="6"
                 aria-describedby="vault-passphrase-hint vault-length-status"
                 required
               />
               <button id="vault-passphrase-toggle" class="password-toggle" type="button" aria-controls="vault-passphrase" aria-pressed="false"><span>הצגת הסיסמה</span></button>
             </span>
-            <small id="vault-passphrase-hint" class="field-hint">לפחות 12 תווים.</small>
+            <small id="vault-passphrase-hint" class="field-hint">לפחות 6 תווים. להגנה חזקה יותר מומלץ לבחור 12 תווים ומעלה.</small>
           </label>
-          <p id="vault-length-status" class="requirement-status" data-state="pending">לפחות 12 תווים</p>
+          <p id="vault-length-status" class="requirement-status" data-state="pending">לפחות 6 תווים</p>
 
           <div id="vault-confirm-field" hidden>
             <label class="field" for="vault-confirm">
@@ -378,7 +378,7 @@
                   name="vaultConfirm"
                   type="password"
                   autocomplete="new-password"
-                  minlength="12"
+                  minlength="6"
                   aria-describedby="vault-match-status"
                 />
                 <button id="vault-confirm-toggle" class="password-toggle" type="button" aria-controls="vault-confirm" aria-pressed="false"><span>הצגת הסיסמה</span></button>
@@ -424,6 +424,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script type="module" src="./app.js?v=20260904"></script>
+    <script type="module" src="./app.js?v=20260904b"></script>
   </body>
 </html>

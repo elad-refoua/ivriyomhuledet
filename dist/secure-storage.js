@@ -4,7 +4,7 @@ export const VAULT_STORAGE_KEY = "ivriyomhuledet.vault.v1";
 export const LEGACY_PEOPLE_KEY = "ivriyomhuledet.people.v1";
 export const LEGACY_CALENDAR_KEY = "ivriyomhuledet.googleCalendarId.v1";
 export const PBKDF2_ITERATIONS = 600_000;
-export const MIN_PASSPHRASE_LENGTH = 12;
+export const MIN_PASSPHRASE_LENGTH = 6;
 export const VAULT_ERROR_CODES = Object.freeze({
   CRYPTO_UNSUPPORTED: "CRYPTO_UNSUPPORTED",
   STORAGE_ACCESS: "STORAGE_ACCESS",
@@ -32,7 +32,7 @@ export class VaultStoreError extends Error {
 export function validatePassphrase(passphrase) {
   const value = String(passphrase ?? "").normalize("NFC");
   if ([...value].length < MIN_PASSPHRASE_LENGTH) {
-    throw new Error("הסיסמה צריכה לכלול לפחות 12 תווים.");
+    throw new Error("הסיסמה צריכה לכלול לפחות 6 תווים.");
   }
   if (!/\S/u.test(value)) throw new Error("הסיסמה צריכה לכלול לפחות אות או סימן אחד.");
   return value;

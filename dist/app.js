@@ -22,7 +22,10 @@ import {
   prepareGoogleIdentity,
   syncGoogleCalendar,
 } from "./google-calendar.js?v=20260904";
-import { createVaultStore } from "./secure-storage.js?v=20260904";
+import {
+  MIN_PASSPHRASE_LENGTH,
+  createVaultStore,
+} from "./secure-storage.js?v=20260904b";
 
 const GOOGLE_CLIENT_ID = document.body.dataset.googleClientId?.trim() || "";
 const SAVE_FAILURE_MESSAGE = "השינוי לא נשמר. המידע הקודם נשאר ללא שינוי.";
@@ -458,7 +461,7 @@ function setPasswordVisibility(input, button, visible) {
 }
 
 function updateVaultRequirements() {
-  const longEnough = vaultPassphrase.value.length >= 12;
+  const longEnough = [...vaultPassphrase.value].length >= MIN_PASSPHRASE_LENGTH;
   const matches = vaultConfirm.value.length > 0 && vaultPassphrase.value === vaultConfirm.value;
   vaultLengthStatus.dataset.state = longEnough ? "complete" : "pending";
   vaultMatchStatus.dataset.state = matches ? "complete" : "pending";
