@@ -112,9 +112,15 @@ assert.match(
 assert.match(indexHtml, /privacy\.html/);
 assert.match(indexHtml, /terms\.html/);
 assert.match(privacyHtml, /פרטיות/);
+assert.match(privacyHtml, /AES-256-GCM/);
+assert.match(privacyHtml, /הסיסמה אינה נשלחת/);
+assert.match(privacyHtml, /אינה ניתנת לשחזור/);
+assert.match(privacyHtml, /תוסף דפדפן|מכשיר/);
 assert.match(termsHtml, /תנאי/);
 assert.match(accessibilityHtml, /<html lang="he" dir="rtl">/);
 assert.match(accessibilityHtml, /הצהרת נגישות/);
+assert.match(accessibilityHtml, /פתיחת הכספת/);
+assert.match(accessibilityHtml, /איפוס המידע המקומי/);
 assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
 assert.doesNotMatch(googleCalendarSource, /localStorage/);
 assert.doesNotMatch(googleCalendarSource, /sessionStorage/);
