@@ -67,6 +67,7 @@ const indexHtml = await readFile(resolve(root, "dist/index.html"), "utf8");
 const privacyHtml = await readFile(resolve(root, "dist/privacy.html"), "utf8");
 const termsHtml = await readFile(resolve(root, "dist/terms.html"), "utf8");
 const accessibilityHtml = await readFile(resolve(root, "dist/accessibility.html"), "utf8");
+const faviconSvg = await readFile(resolve(root, "dist/favicon.svg"), "utf8");
 const googleCalendarSource = await readFile(resolve(root, "dist/google-calendar.js"), "utf8");
 const appSource = await readFile(resolve(root, "dist/app.js"), "utf8");
 const stylesSource = await readFile(resolve(root, "dist/styles.css"), "utf8");
@@ -211,6 +212,7 @@ assert.match(accessibilityHtml, /הצהרת נגישות/);
 assert.match(accessibilityHtml, /פתיחת הכספת/);
 assert.match(accessibilityHtml, /איפוס המידע המקומי/);
 assert.match(accessibilityHtml, /eladrefoua@gmail\.com/);
+assert.match(faviconSvg, /<svg[^>]+viewBox="0 0 48 48"/);
 assert.match(accessibilityHtml, /הצגה והסתרה של הסיסמה/);
 assert.match(accessibilityHtml, /שגיאות המקושרות לשדות/);
 assert.match(accessibilityHtml, /מצב הסנכרון מוקרא/);
@@ -237,6 +239,7 @@ for (const [name, html] of [
   ["terms", termsHtml],
   ["accessibility", accessibilityHtml],
 ]) {
+  assert.match(html, /favicon\.svg/, `${name} is missing the site icon`);
   assert.match(html, /class="skip-link" href="#main-content"/, `${name} is missing a skip link`);
   assert.match(html, /id="main-content"/, `${name} is missing the main-content target`);
   assert.match(html, /accessibility\.html/, `${name} is missing the accessibility link`);
