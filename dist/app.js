@@ -152,11 +152,11 @@ form.addEventListener("submit", async (event) => {
       reminder: reminderInput.value,
     };
 
+    invalidateSyncAfterBirthdayMutation();
     saveAttempted = true;
     await persistState((currentPeople) => editingAtSubmit
       ? currentPeople.map((item) => (item.id === editingAtSubmit ? person : item))
       : [...currentPeople, person]);
-    invalidateSyncAfterBirthdayMutation();
     showToast(editingAtSubmit ? `הפרטים של ${name} עודכנו` : `${name} נוסף לרשימה`);
     renderPeople();
     resetForm();
@@ -223,6 +223,7 @@ confirmDialog.addEventListener("close", async () => {
 
   const deletion = pendingDelete;
   pendingDelete = null;
+  invalidateSyncAfterBirthdayMutation();
   try {
     await persistState((currentPeople) => deletion.type === "person"
       ? currentPeople.filter((person) => person.id !== deletion.id)
@@ -234,7 +235,6 @@ confirmDialog.addEventListener("close", async () => {
     return;
   }
 
-  invalidateSyncAfterBirthdayMutation();
   if (deletion.type === "person") {
     const removed = people.find((person) => person.id === deletion.id);
     if (editingId === deletion.id) resetForm();
@@ -461,10 +461,31 @@ async function handleVaultReset() {
     setVaultMode("create");
     vaultPassphrase.focus();
   } catch {
-    showVaultError("לא הצלחנו לאפס את הכספת.");
+    resetInProgress = false;
+    vaultStore.lock();
+    keepVaultShellLocked();
+    const status = safeVaultStatus();
+    setVaultMode(status === "legacy" ? "migrate" : status === "empty" ? "create" : "unlock");
+    showVaultError("לא הצלחנו לאפס את הכספת. נסו שוב.");
+    vaultPassphrase.focus();
   } finally {
     vaultResetApprove.disabled = false;
+    if (!resetInProgress) vaultSubmit.disabled = false;
   }
+}
+
+function safeVaultStatus() {
+  try {
+    return vaultStore.status();
+  } catch {
+    return "locked";
+  }
+}
+
+function keepVaultShellLocked() {
+  appShell.setAttribute("aria-hidden", "true");
+  appShell.setAttribute("inert", "");
+  lockButton.hidden = true;
 }
 
 function lockApplication() {

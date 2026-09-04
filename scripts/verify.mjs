@@ -84,8 +84,26 @@ assert.match(appSource, /clearGoogleSession\(\)/);
 assert.match(appSource, /invalidateSyncAfterBirthdayMutation/);
 assert.ok(
   (appSource.match(/invalidateSyncAfterBirthdayMutation\(\);/g) || []).length >= 2,
-  "birthday mutations must invalidate sync after successful persistence"
+  "birthday mutations must invalidate sync before persistence"
 );
+const addMutationStart = appSource.indexOf("const editingAtSubmit = editingId;");
+const addMutationBlock = appSource.slice(addMutationStart, addMutationStart + 900);
+assert.ok(
+  addMutationBlock.indexOf("invalidateSyncAfterBirthdayMutation();") <
+    addMutationBlock.indexOf("await persistState"),
+  "birthday sync must be invalidated before add/edit persistence"
+);
+const deleteMutationStart = appSource.indexOf("const deletion = pendingDelete;");
+const deleteMutationBlock = appSource.slice(deleteMutationStart, deleteMutationStart + 700);
+assert.ok(
+  deleteMutationBlock.indexOf("invalidateSyncAfterBirthdayMutation();") <
+    deleteMutationBlock.indexOf("await persistState"),
+  "birthday delete/clear sync must be invalidated before persistence"
+);
+assert.match(appSource, /catch \{\s*resetInProgress = false;/);
+assert.match(appSource, /vaultStore\.status\(\)/g);
+assert.match(appSource, /vaultSubmit\.disabled = false/);
+assert.match(appSource, /לא הצלחנו לאפס את הכספת\. נסו שוב/);
 assert.doesNotMatch(appSource, /localStorage/);
 assert.doesNotMatch(appSource, /function loadPeople/);
 assert.doesNotMatch(appSource, /function savePeople/);
