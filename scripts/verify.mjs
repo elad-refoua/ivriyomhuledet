@@ -133,6 +133,8 @@ assert.match(appSource, /function setPasswordVisibility\(/);
 assert.match(appSource, /function updateVaultRequirements\(/);
 assert.match(stylesSource, /body:has\(\.vault-dialog\[open\]\)\s*\{[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /@media \(max-width: 650px\)[\s\S]*\.vault-dialog[\s\S]*height:\s*100dvh/);
+const desktopVaultStyles = stylesSource.slice(0, stylesSource.indexOf("@media (max-width: 650px)"));
+assert.match(desktopVaultStyles, /\.vault-actions\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*0[^}]*background:\s*#fff/s);
 
 const csp = indexHtml.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1] || "";
 assert.match(csp, /default-src 'self'/);

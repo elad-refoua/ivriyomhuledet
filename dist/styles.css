@@ -1460,8 +1460,11 @@ body:has(.vault-dialog[open]) {
 }
 
 .vault-actions {
+  position: sticky;
+  bottom: 0;
   display: grid;
   gap: 9px;
+  background: #fff;
 }
 
 .vault-dialog button,
@@ -1758,10 +1761,7 @@ body:has(.vault-dialog[open]) {
   }
 
   .vault-actions {
-    position: sticky;
-    bottom: 0;
     padding: 12px 0 2px;
-    background: #fff;
   }
 
   .vault-actions,
