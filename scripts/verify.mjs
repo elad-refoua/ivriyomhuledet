@@ -146,6 +146,11 @@ assert.match(appSource, /className = "action-label"/);
 assert.match(appSource, /button\.append\(icon, actionLabel\)/);
 assert.match(stylesSource, /\.icon-button\s*\{[^}]*min-height:\s*44px/s);
 assert.match(stylesSource, /\.icon-button\s*\{[^}]*min-width:\s*44px/s);
+assert.match(stylesSource, /(?:^|\r?\n)\.quiet-button\s*\{[^}]*min-height:\s*44px/s);
+assert.match(stylesSource, /\.segmented span\s*\{[^}]*min-height:\s*44px/s);
+assert.match(stylesSource, /\.upcoming-dates summary\s*\{[^}]*min-height:\s*44px/s);
+assert.match(stylesSource, /footer a\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/s);
+assert.match(stylesSource, /\.back-link\s*\{[^}]*min-height:\s*44px/s);
 assert.match(indexHtml, /הוספת יום הולדת ראשון/);
 assert.match(appSource, /people\.length === 1 \? "יום הולדת אחד" : `\$\{people\.length\} ימי הולדת`/);
 for (const id of ["sync-event-count", "sync-privacy-points", "sync-progressbar"]) {
