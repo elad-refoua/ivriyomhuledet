@@ -122,6 +122,11 @@ assert.match(indexHtml, /מוגן במכשיר הזה/);
 assert.match(appSource, /function focusAfterVaultOpen\(/);
 assert.match(appSource, /appShell\.dataset\.listState/);
 assert.match(appSource, /setAttribute\("aria-current", "step"\)/);
+assert.match(stylesSource, /\.privacy-pill\s*\{[^}]*min-height:\s*44px/s);
+assert.match(
+  stylesSource,
+  /@media \(max-width: 650px\)[\s\S]*\.privacy-pill\s*\{[^}]*min-width:\s*44px[^}]*height:\s*44px[^}]*min-height:\s*44px/s
+);
 
 for (const id of [
   "vault-scroll",

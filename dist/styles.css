@@ -162,7 +162,7 @@ button:disabled {
 
 .privacy-pill {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   padding: 0 14px;
@@ -196,7 +196,7 @@ button:disabled {
 }
 
 .vault-lock-button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 13px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -1697,9 +1697,9 @@ body:has(.vault-dialog[open]) {
   }
 
   .privacy-pill {
-    min-width: 42px;
-    height: 42px;
-    min-height: 42px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
     justify-content: center;
     padding: 0 10px;
   }
