@@ -72,6 +72,8 @@ const googleCalendarSource = await readFile(resolve(root, "dist/google-calendar.
 const appSource = await readFile(resolve(root, "dist/app.js"), "utf8");
 const stylesSource = await readFile(resolve(root, "dist/styles.css"), "utf8");
 assert.match(appSource, /createVaultStore/);
+assert.match(indexHtml, /app\.js\?v=20260906/);
+assert.match(appSource, /google-calendar\.js\?v=20260906/);
 assert.match(appSource, /await bootstrapVault\(\)/);
 assert.match(appSource, /await vaultStore\.save/);
 assert.match(appSource, /calendarId:\s*googleCalendarId/);
@@ -297,6 +299,194 @@ assert.ok(
   "Google event source URL must point to the public GitHub Pages site"
 );
 
+let rateLimitedInsertAttempts = 0;
+let throttledEventId = "";
+let throttledResponses = 0;
+const retryDelays = [];
+const originalSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (callback, delay) => {
+  retryDelays.push(delay);
+  return originalSetTimeout(callback, 0);
+};
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/retry-calendar") && !url.includes("/events") && !options.method) {
+    return jsonResponse({ id: "retry-calendar" });
+  }
+  if (url.includes("/calendars/retry-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/retry-calendar/events") && options.method === "POST") {
+    rateLimitedInsertAttempts += 1;
+    const eventId = JSON.parse(options.body).id;
+    throttledEventId ||= eventId;
+    if (eventId === throttledEventId && throttledResponses < 2) {
+      const firstThrottle = throttledResponses === 0;
+      throttledResponses += 1;
+      return firstThrottle
+        ? googleErrorResponse(429, "", "Too Many Requests")
+        : googleErrorResponse(403, "rateLimitExceeded", "Rate Limit Exceeded");
+    }
+    return jsonResponse({ id: `retry-event-${rateLimitedInsertAttempts}` });
+  }
+  throw new Error(`Unexpected retry request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+try {
+  const retryResult = await syncGoogleCalendar([person], { calendarId: "retry-calendar" });
+  assert.equal(retryResult.eventCount, 20);
+  assert.equal(rateLimitedInsertAttempts, 22, "two throttled writes should be retried");
+  assert.equal(retryDelays.length, 2, "each throttled response should schedule one retry");
+  assert.ok(retryDelays[1] > retryDelays[0], "retry waits should increase exponentially");
+} finally {
+  globalThis.setTimeout = originalSetTimeout;
+  disconnectGoogle();
+}
+
+let activeCalendarWrites = 0;
+let maximumConcurrentCalendarWrites = 0;
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/sequential-calendar") && !url.includes("/events") && !options.method) {
+    return jsonResponse({ id: "sequential-calendar" });
+  }
+  if (url.includes("/calendars/sequential-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/sequential-calendar/events") && options.method === "POST") {
+    activeCalendarWrites += 1;
+    maximumConcurrentCalendarWrites = Math.max(
+      maximumConcurrentCalendarWrites,
+      activeCalendarWrites
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    activeCalendarWrites -= 1;
+    return jsonResponse({ id: "sequential-event" });
+  }
+  throw new Error(`Unexpected sequential request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+try {
+  await syncGoogleCalendar([person], { calendarId: "sequential-calendar" });
+  assert.equal(
+    maximumConcurrentCalendarWrites,
+    1,
+    "writes to one Google calendar must be paced sequentially"
+  );
+} finally {
+  disconnectGoogle();
+}
+
+let persistentRateLimitAttempts = 0;
+const persistentRetryDelays = [];
+globalThis.setTimeout = (callback, delay) => {
+  persistentRetryDelays.push(delay);
+  return originalSetTimeout(callback, 0);
+};
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/overloaded-calendar") && !url.includes("/events") && !options.method) {
+    return jsonResponse({ id: "overloaded-calendar" });
+  }
+  if (url.includes("/calendars/overloaded-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/overloaded-calendar/events") && options.method === "POST") {
+    persistentRateLimitAttempts += 1;
+    return googleErrorResponse(403, "rateLimitExceeded", "Rate Limit Exceeded");
+  }
+  throw new Error(`Unexpected overloaded request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+try {
+  await assert.rejects(
+    () => syncGoogleCalendar([person], { calendarId: "overloaded-calendar" }),
+    (error) => {
+      assert.equal(error?.status, 403);
+      assert.equal(error?.reason, "rateLimitExceeded");
+      assert.match(error?.message ?? "", /עומס זמני/);
+      assert.doesNotMatch(error?.message ?? "", /הרשאה/);
+      return true;
+    }
+  );
+  assert.equal(persistentRateLimitAttempts, 5, "rate limiting should stop after bounded retries");
+  assert.equal(persistentRetryDelays.length, 4, "four bounded retries should be scheduled");
+} finally {
+  globalThis.setTimeout = originalSetTimeout;
+  disconnectGoogle();
+}
+
+let permissionFailureAttempts = 0;
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/permission-calendar") && !url.includes("/events") && !options.method) {
+    return jsonResponse({ id: "permission-calendar" });
+  }
+  if (url.includes("/calendars/permission-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/permission-calendar/events") && options.method === "POST") {
+    permissionFailureAttempts += 1;
+    return googleErrorResponse(403, "insufficientPermissions", "Insufficient Permission");
+  }
+  throw new Error(`Unexpected permission request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+try {
+  await assert.rejects(
+    () => syncGoogleCalendar([person], { calendarId: "permission-calendar" }),
+    (error) => {
+      assert.equal(error?.status, 403);
+      assert.equal(error?.reason, "insufficientPermissions");
+      assert.match(error?.message ?? "", /הרשאה/);
+      return true;
+    }
+  );
+  assert.equal(permissionFailureAttempts, 1, "permission failures must not be retried");
+} finally {
+  disconnectGoogle();
+}
+
+let cancellationRetryAttempts = 0;
+let retryWaitStarted = false;
+let releaseRetryWait;
+globalThis.setTimeout = (callback) => {
+  retryWaitStarted = true;
+  releaseRetryWait = callback;
+  return 0;
+};
+globalThis.fetch = async (url, options = {}) => {
+  if (url.includes("/calendars/cancel-retry-calendar") && !url.includes("/events") && !options.method) {
+    return jsonResponse({ id: "cancel-retry-calendar" });
+  }
+  if (url.includes("/calendars/cancel-retry-calendar/events?") && !options.method) {
+    return jsonResponse({ items: [] });
+  }
+  if (url.endsWith("/calendars/cancel-retry-calendar/events") && options.method === "POST") {
+    cancellationRetryAttempts += 1;
+    return cancellationRetryAttempts === 1
+      ? googleErrorResponse(429, "", "Too Many Requests")
+      : jsonResponse({ id: "write-after-cancellation" });
+  }
+  throw new Error(`Unexpected retry cancellation request: ${options.method || "GET"} ${url}`);
+};
+
+await connectGoogle("verification.apps.googleusercontent.com");
+try {
+  const pendingRetryCancellationSync = syncGoogleCalendar([person], {
+    calendarId: "cancel-retry-calendar",
+  });
+  while (!retryWaitStarted) await new Promise((resolve) => setImmediate(resolve));
+  cancelGoogleSync();
+  releaseRetryWait();
+  await assert.rejects(() => pendingRetryCancellationSync, /החיבור ל־Google בוטל/);
+  assert.equal(cancellationRetryAttempts, 1, "cancellation must prevent the retried write");
+  assert.equal(isGoogleConnected(), true);
+} finally {
+  globalThis.setTimeout = originalSetTimeout;
+  disconnectGoogle();
+}
+
 const requestOrder = [];
 globalThis.fetch = async (url, options = {}) => {
   if (url.includes("/calendars/missing-calendar") && !options.method) {
@@ -408,5 +598,19 @@ function errorResponse(status, message = "") {
     ok: false,
     status,
     json: async () => ({ error: { message } }),
+  };
+}
+
+function googleErrorResponse(status, reason, message) {
+  return {
+    ok: false,
+    status,
+    json: async () => ({
+      error: {
+        errors: [{ domain: "usageLimits", reason, message }],
+        code: status,
+        message,
+      },
+    }),
   };
 }

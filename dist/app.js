@@ -21,7 +21,7 @@ import {
   isGoogleConnected,
   prepareGoogleIdentity,
   syncGoogleCalendar,
-} from "./google-calendar.js?v=20260904";
+} from "./google-calendar.js?v=20260906";
 import {
   MIN_PASSPHRASE_LENGTH,
   createVaultStore,

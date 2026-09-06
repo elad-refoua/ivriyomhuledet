@@ -4,6 +4,14 @@ export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.a
 
 const API_ROOT = "https://www.googleapis.com/calendar/v3";
 const APP_TAG = "ivriyomhuledet";
+const MAX_RATE_LIMIT_RETRIES = 4;
+const RETRY_BASE_DELAY_MS = 1000;
+const RETRY_MAX_DELAY_MS = 8000;
+const RATE_LIMIT_REASONS = new Set([
+  "quotaExceeded",
+  "rateLimitExceeded",
+  "userRateLimitExceeded",
+]);
 
 let currentAccessToken = "";
 let connectionGeneration = 0;
@@ -134,7 +142,7 @@ export async function syncGoogleCalendar(
     });
   };
 
-  await mapInBatches(staleEvents, 4, async (event) => {
+  await mapInBatches(staleEvents, 1, async (event) => {
     assertActiveSession(syncGeneration);
     await apiRequest(
       `/calendars/${encodeURIComponent(ensured.calendarId)}/events/${encodeURIComponent(event.id)}`,
@@ -144,7 +152,7 @@ export async function syncGoogleCalendar(
     reportProgress("מעדכנים את הרשימה ביומן…");
   });
 
-  await mapInBatches(desiredEvents, 4, async ({ id, source }) => {
+  await mapInBatches(desiredEvents, 1, async ({ id, source }) => {
     assertActiveSession(syncGeneration);
     const body = googleEventBody(id, source);
     if (existingById.has(id)) {
@@ -248,31 +256,57 @@ function googleEventBody(id, event) {
 }
 
 async function apiRequest(path, accessToken, options = {}) {
-  const response = await fetch(`${API_ROOT}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const requestGeneration = connectionGeneration;
+  for (let attempt = 0; ; attempt += 1) {
+    assertActiveSession(requestGeneration);
+    const response = await fetch(`${API_ROOT}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+    });
 
-  if (response.ok) {
-    if (response.status === 204) return null;
-    return response.json();
+    if (response.ok) {
+      if (response.status === 204) return null;
+      return response.json();
+    }
+
+    let serverMessage = "";
+    let serverReason = "";
+    try {
+      const payload = await response.json();
+      serverMessage = payload?.error?.message || "";
+      serverReason = payload?.error?.errors?.[0]?.reason || "";
+    } catch {
+      serverMessage = "";
+      serverReason = "";
+    }
+
+    if (isRateLimitError(response.status, serverReason) && attempt < MAX_RATE_LIMIT_RETRIES) {
+      await wait(retryDelay(attempt));
+      continue;
+    }
+
+    const error = new Error(calendarErrorMessage(response.status, serverMessage, serverReason));
+    error.status = response.status;
+    error.reason = serverReason;
+    throw error;
   }
+}
 
-  let serverMessage = "";
-  try {
-    const payload = await response.json();
-    serverMessage = payload?.error?.message || "";
-  } catch {
-    serverMessage = "";
-  }
+function isRateLimitError(status, reason) {
+  return status === 429 || (status === 403 && RATE_LIMIT_REASONS.has(reason));
+}
 
-  const error = new Error(calendarErrorMessage(response.status, serverMessage));
-  error.status = response.status;
-  throw error;
+function retryDelay(attempt) {
+  const exponentialDelay = Math.min(RETRY_BASE_DELAY_MS * (2 ** attempt), RETRY_MAX_DELAY_MS);
+  return exponentialDelay + Math.floor(Math.random() * 251);
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function stableEventId(personId, hebrewYear) {
@@ -302,10 +336,12 @@ function popupErrorMessage(type) {
   return "לא הצלחנו לפתוח את החיבור ל־Google.";
 }
 
-function calendarErrorMessage(status, serverMessage) {
+function calendarErrorMessage(status, serverMessage, serverReason) {
   if (status === 401) return "החיבור ל־Google פג. התחברו מחדש ונסו שוב.";
+  if (isRateLimitError(status, serverReason)) {
+    return "Google Calendar נמצא כרגע בעומס זמני. האירועים שכבר נוספו נשארו ביומן; המתינו דקה ונסו שוב.";
+  }
   if (status === 403) return "Google לא אישר את הפעולה. בדקו את ההרשאה ונסו שוב.";
-  if (status === 429) return "Google קיבל יותר מדי בקשות בבת אחת. המתינו רגע ונסו שוב.";
   if (status >= 500) return "יש כרגע תקלה זמנית ב־Google Calendar. נסו שוב בעוד כמה דקות.";
   return serverMessage ? `Google Calendar החזיר שגיאה: ${serverMessage}` : "הסנכרון ל־Google Calendar נכשל.";
 }
